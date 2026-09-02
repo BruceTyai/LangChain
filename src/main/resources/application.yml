@@ -1,0 +1,28 @@
+spring:
+  application.name: localmind
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/knowledge_base?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:jfjbjfjb}
+  jpa:
+    hibernate.ddl-auto: update
+    open-in-view: false
+  servlet.multipart:
+    max-file-size: 30MB
+    max-request-size: 30MB
+server.port: ${SERVER_PORT:8080}
+app:
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    chat-model: ${OLLAMA_CHAT_MODEL:deepseek-r1:7b}
+    embedding-model: ${OLLAMA_EMBEDDING_MODEL:bge-m3:latest}
+  chroma:
+    base-url: ${CHROMA_BASE_URL:http://localhost:8000}
+    collection: ${CHROMA_COLLECTION:localmind_documents}
+    tenant: ${CHROMA_TENANT:default_tenant}
+    database: ${CHROMA_DATABASE:default_database}
+  rag:
+    max-results: 6
+    min-score: 0.55
+    segment-size: 700
+    overlap: 100
