@@ -2,6 +2,49 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => document.querySelectorAll(selector);
 let busy = false;
 const confirmingDocuments = new Set();
+let csrfHeader;
+let csrfToken;
+let isAdmin = false;
+
+async function loadSession() {
+  const response = await fetch('/api/auth/me');
+  if (!response.ok) {
+    window.location.href = '/login';
+    throw new Error('登录状态已失效');
+  }
+  const session = await response.json();
+  csrfHeader = session.csrfHeader;
+  csrfToken = session.csrfToken;
+  isAdmin = session.role === 'ADMIN';
+  $('#currentUser').textContent = session.username;
+  $('#currentRole').textContent = isAdmin ? '管理员' : '普通用户';
+  $('#userAvatar').textContent = session.username.slice(0, 2).toUpperCase();
+  $('#docNav').hidden = !isAdmin;
+  $('#userNav').hidden = !isAdmin;
+}
+
+const sessionReady = loadSession();
+
+async function apiFetch(url, options = {}) {
+  await sessionReady;
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers.set(csrfHeader, csrfToken);
+  }
+  const response = await fetch(url, {...options, headers});
+  if (response.status === 401) redirectToLogin();
+  if (response.status === 403) {
+    const sessionResponse = await fetch('/api/auth/me');
+    if (sessionResponse.status === 401) redirectToLogin();
+  }
+  return response;
+}
+
+function redirectToLogin() {
+  window.location.href = '/login';
+  throw new Error('登录状态已失效');
+}
 let showSources = true;
 try {
   showSources = localStorage.getItem('showSources') !== 'false';
@@ -46,12 +89,14 @@ $('#showSources').onchange = event => {
 applySourceVisibility();
 
 function switchView(view) {
+  if (['docs', 'users'].includes(view) && !isAdmin) return;
   $$('nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach(element => element.classList.remove('active'));
   $(`#${view}View`).classList.add('active');
   $('#pageTitle').textContent = view === 'chat' ? '知识问答' : '知识库';
   $('#subtitle').textContent = view === 'chat' ? '基于你的资料进行可靠回答' : '管理与索引本地资料';
   if (view === 'docs') loadDocs();
+  if (view === 'users') loadUsers();
 }
 
 $$('nav button').forEach(button => button.onclick = () => switchView(button.dataset.view));
@@ -92,7 +137,7 @@ $('#chatForm').onsubmit = async event => {
   $('#question').value = '';
   const waiting = addBubble('ai', '正在检索知识库并生成回答…');
   try {
-    const response = await fetch('/api/chat', {
+    const response = await apiFetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({message: question})
@@ -141,7 +186,7 @@ function displayedStatus(document) {
 
 async function loadDocs() {
   try {
-    const response = await fetch(`/api/documents?page=${currentPage - 1}`);
+    const response = await apiFetch(`/api/documents?page=${currentPage - 1}`);
     const result = await response.json();
     if (!response.ok) throw Error(result.message || '无法读取文档列表');
     totalPages = Math.max(1, result.totalPages);
@@ -185,7 +230,7 @@ async function upload(files) {
   const form = new FormData();
   selectedFiles.forEach(file => form.append('file', file));
   try {
-    const response = await fetch('/api/documents', {method: 'POST', body: form});
+    const response = await apiFetch('/api/documents', {method: 'POST', body: form});
     const data = await response.json();
     if (!response.ok) throw Error(data.message || '上传失败');
     toast(`${data.length} 个文件上传完成，请在列表中确认解析`);
@@ -200,7 +245,7 @@ async function confirmAll() {
   if (confirmingDocuments.size > 0) return;
   let documents;
   try {
-    const response = await fetch('/api/documents/confirmable');
+    const response = await apiFetch('/api/documents/confirmable');
     const data = await response.json();
     if (!response.ok) throw Error(data.message || '无法读取待解析文档');
     documents = data;
@@ -218,7 +263,7 @@ async function confirmAll() {
     processingDocumentId = document.id;
     await loadDocs();
     try {
-      const response = await fetch(`/api/documents/${document.id}/confirm`, {method: 'POST'});
+      const response = await apiFetch(`/api/documents/${document.id}/confirm`, {method: 'POST'});
       const data = await response.json();
       if (!response.ok) throw Error(data.message || '解析失败');
       data.status === 'READY' ? succeeded++ : failed++;
@@ -237,7 +282,7 @@ async function confirmAll() {
 async function removeDoc(id) {
   if (!confirm('删除这条文档记录？')) return;
   try {
-    const response = await fetch(`/api/documents/${id}`, {method: 'DELETE'});
+    const response = await apiFetch(`/api/documents/${id}`, {method: 'DELETE'});
     if (!response.ok) {
       const data = await response.json();
       throw Error(data.message || '删除失败');
@@ -273,5 +318,75 @@ $('#nextPage').onclick = () => {
     loadDocs();
   }
 };
+$('#logout').onclick = async () => {
+  await apiFetch('/logout', {method: 'POST'});
+  window.location.href = '/login?logout';
+};
+async function loadUsers() {
+  try {
+    const response = await apiFetch('/api/users');
+    const users = await response.json();
+    if (!response.ok) throw Error(users.message || '无法读取用户列表');
+    $('#userList').innerHTML = users.length ? users.map(user => '<div class="user-row">' +
+      '<b>' + escapeHtml(user.username) + (user.username === $('#currentUser').textContent ? '（当前用户）' : '') + '</b>' +
+      '<select onchange="updateUser(' + user.id + ', this.value, ' + user.enabled + ')">' +
+        '<option value="USER" ' + (user.role === 'USER' ? 'selected' : '') + '>普通用户</option>' +
+        '<option value="ADMIN" ' + (user.role === 'ADMIN' ? 'selected' : '') + '>管理员</option>' +
+      '</select>' +
+      '<label class="user-enabled"><input type="checkbox" ' + (user.enabled ? 'checked' : '') +
+        ' onchange="updateUser(' + user.id + ', &quot;' + user.role + '&quot;, this.checked)">启用</label>' +
+      '<span>' + new Date(user.createdAt).toLocaleString('zh-CN') + '</span>' +
+      '<div class="user-actions"><button onclick="resetUserPassword(' + user.id + ')">重置密码</button>' +
+      '<button class="danger" onclick="deleteUser(' + user.id + ')">删除</button></div></div>').join('') :
+      '<div class="empty">暂无用户</div>';
+  } catch (error) { toast(error.message || '无法读取用户列表'); }
+}
+
+async function updateUser(id, role, enabled) {
+  try {
+    const response = await apiFetch('/api/users/' + id, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role, enabled})});
+    const data = await response.json();
+    if (!response.ok) throw Error(data.message || '更新用户失败');
+    toast('用户信息已更新'); loadUsers();
+  } catch (error) { toast(error.message || '更新用户失败'); loadUsers(); }
+}
+
+async function resetUserPassword(id) {
+  const password = prompt('请输入新密码（至少6位）');
+  if (password === null) return;
+  if (password.length < 6) return toast('密码至少需要6位');
+  try {
+    const response = await apiFetch('/api/users/' + id + '/password', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password})});
+    const data = response.status === 204 ? {} : await response.json();
+    if (!response.ok) throw Error(data.message || '重置密码失败');
+    toast('密码已重置');
+  } catch (error) { toast(error.message || '重置密码失败'); }
+}
+
+async function deleteUser(id) {
+  if (!confirm('确认删除该用户？')) return;
+  try {
+    const response = await apiFetch('/api/users/' + id, {method: 'DELETE'});
+    const data = response.status === 204 ? {} : await response.json();
+    if (!response.ok) throw Error(data.message || '删除用户失败');
+    toast('用户已删除'); loadUsers();
+  } catch (error) { toast(error.message || '删除用户失败'); }
+}
+
+$('#userForm').onsubmit = async event => {
+  event.preventDefault();
+  try {
+    const response = await apiFetch('/api/users', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: $('#newUsername').value.trim(), password: $('#newPassword').value, role: $('#newRole').value})});
+    const data = await response.json();
+    if (!response.ok) throw Error(data.message || '创建用户失败');
+    event.target.reset(); toast('用户已创建'); loadUsers();
+  } catch (error) { toast(error.message || '创建用户失败'); }
+};
+
+window.updateUser = updateUser;
+window.resetUserPassword = resetUserPassword;
+window.deleteUser = deleteUser;
 window.removeDoc = removeDoc;
-loadDocs();
+sessionReady.then(() => {
+  if (isAdmin) loadDocs();
+}).catch(() => {});

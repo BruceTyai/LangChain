@@ -1,0 +1,1 @@
+package com.localmind.dto; import jakarta.validation.constraints.*; public record PasswordResetRequest(@NotBlank @Size(min=6,max=72) String password){}

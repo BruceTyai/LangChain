@@ -1,0 +1,1 @@
+package com.localmind.dto; import jakarta.validation.constraints.Pattern; public record UserUpdateRequest(@Pattern(regexp="ADMIN|USER") String role,Boolean enabled){}

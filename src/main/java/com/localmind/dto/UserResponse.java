@@ -1,0 +1,1 @@
+package com.localmind.dto; import com.localmind.dao.entity.AppUser; import java.time.Instant; public record UserResponse(Long id,String username,String role,boolean enabled,Instant createdAt){public static UserResponse from(AppUser u){return new UserResponse(u.getId(),u.getUsername(),u.getRole().name(),u.isEnabled(),u.getCreatedAt());}}

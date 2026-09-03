@@ -2,9 +2,9 @@
 <body><div class="shell">
  <aside><div class="brand"><span class="mark">技</span><div><b>技术保障部知识库系统</b><small>TECH SUPPORT KNOWLEDGE</small></div></div>
   <button class="new" id="newChat">＋ 新对话 <kbd>⌘ K</kbd></button>
-  <nav><span>工作区</span><button class="active" data-view="chat"><i>⌁</i>知识问答</button><button data-view="docs"><i>▤</i>知识库 <em id="docCount">0</em></button></nav>
+  <nav><span>工作区</span><button class="active" data-view="chat"><i>⌁</i>知识问答</button><button id="docNav" data-view="docs"><i>▤</i>知识库 <em id="docCount">0</em></button><button id="userNav" data-view="users"><i>♙</i>用户管理</button></nav>
   <div class="stack"><span>运行栈</span><p><i class="dot ok"></i>deepseek-r1:7b</p><p><i class="dot"></i>bge-m3:latest</p><p><i class="dot"></i>Chroma · MySQL</p></div>
-  <div class="user"><span>技保</span><div><b>技术保障部</b><small>内部知识工作区</small></div><i>•••</i></div>
+  <div class="user"><span id="userAvatar">用户</span><div><b id="currentUser">正在加载</b><small id="currentRole">身份验证中</small></div><button id="logout" class="logout" type="button">退出</button></div>
  </aside>
  <main><header><div><b id="pageTitle">知识问答</b><span>／</span><small id="subtitle">基于你的资料进行可靠回答</small></div><button class="status"><i></i>本地运行</button></header>
   <section id="chatView" class="view active"><div id="messages" class="messages"><div class="hero"><span class="spark">✦</span><h1>今天想了解什么？</h1><p>我会从你的知识库中检索相关内容，并给出带来源的回答。</p><div class="prompts"><button>总结知识库的核心内容 <i>↗</i></button><button>有哪些值得关注的信息？ <i>↗</i></button><button>对比文档中的关键观点 <i>↗</i></button></div></div></div>
@@ -15,4 +15,4 @@
    <div class="table"><div class="thead"><span>文档</span><span>分块</span><span>状态</span><span>上传时间</span><span></span></div><div id="docList"></div></div>
    <div id="pagination" class="pagination"><button id="prevPage">上一页</button><span id="pageInfo">1 / 1</span><button id="nextPage">下一页</button></div>
   </section>
- </main></div><div id="toast"></div><script src="/app.js"></script></body></html>
+  <section id="usersView" class="view docs"><div class="docs-head"><div><h1>用户管理</h1><p>创建账号并管理系统访问权限。</p></div></div><form id="userForm" class="user-form"><input id="newUsername" placeholder="用户名（3-30位）" required><input id="newPassword" type="password" placeholder="初始密码（至少6位）" required><select id="newRole"><option value="USER">普通用户</option><option value="ADMIN">管理员</option></select><button type="submit">创建用户</button></form><div class="table user-table"><div class="thead"><span>用户</span><span>角色</span><span>状态</span><span>创建时间</span><span>操作</span></div><div id="userList"></div></div></section> </main></div><div id="toast"></div><script src="/app.js"></script></body></html>

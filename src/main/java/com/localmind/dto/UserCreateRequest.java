@@ -1,0 +1,1 @@
+package com.localmind.dto; import jakarta.validation.constraints.*; public record UserCreateRequest(@NotBlank @Pattern(regexp="[A-Za-z0-9_.-]{3,30}") String username,@NotBlank @Size(min=6,max=72) String password,@Pattern(regexp="ADMIN|USER") String role){}
