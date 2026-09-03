@@ -9,6 +9,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "knowledge_documents")
@@ -25,18 +27,22 @@ public class KnowledgeDocument {
     private long sizeBytes;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Status status = Status.PROCESSING;
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
+    private Status status = Status.PENDING;
 
     private int chunkCount;
 
     @Column(length = 1000)
     private String errorMessage;
 
+    @Column(length = 255)
+    private String stagedFile;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    public enum Status { PROCESSING, READY, FAILED }
+    public enum Status { PENDING, PROCESSING, READY, FAILED }
 
     public Long getId() { return id; }
     public String getName() { return name; }
@@ -51,6 +57,8 @@ public class KnowledgeDocument {
     public void setChunkCount(int chunkCount) { this.chunkCount = chunkCount; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public String getStagedFile() { return stagedFile; }
+    public void setStagedFile(String stagedFile) { this.stagedFile = stagedFile; }
     public Instant getCreatedAt() { return createdAt; }
 }
 

@@ -5,3 +5,4 @@ target/
 .env
 .run/
 chroma-data/
+data/
