@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.localmind.dto.DocumentPageResponse;
 import com.localmind.service.DocumentService;
 import java.io.IOException;
 import java.util.List;
@@ -15,6 +16,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.multipart.MultipartFile;
 
 class DocumentControllerTest {
+
+    @Test
+    void listUsesFixedPageSizeOfTen() {
+        DocumentService service = mock(DocumentService.class);
+        DocumentPageResponse expected = new DocumentPageResponse(List.of(), 0, 0, 2, 0);
+        when(service.page(2, 10)).thenReturn(expected);
+
+        DocumentPageResponse response = new DocumentController(service).list(2);
+
+        assertEquals(expected, response);
+        verify(service).page(2, 10);
+    }
 
     @Test
     void rejectsFilesWhoseCombinedSizeExceedsThirtyMegabytesBeforeReadingContent() throws IOException {

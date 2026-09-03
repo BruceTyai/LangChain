@@ -2,8 +2,9 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => document.querySelectorAll(selector);
 let busy = false;
 const confirmingDocuments = new Set();
-let documentsCache = [];
+let totalPages = 1;
 let processingDocumentId = null;
+let currentPage = 1;
 
 const toast = message => {
   const element = $('#toast');
@@ -106,11 +107,20 @@ function displayedStatus(document) {
 
 async function loadDocs() {
   try {
-    const response = await fetch('/api/documents');
-    const documents = await response.json();
-    documentsCache = documents;
-    $('#docCount').textContent = documents.length;
-    const confirmableCount = documents.filter(document => document.confirmable).length;
+    const response = await fetch(`/api/documents?page=${currentPage - 1}`);
+    const result = await response.json();
+    if (!response.ok) throw Error(result.message || '无法读取文档列表');
+    totalPages = Math.max(1, result.totalPages);
+    if (currentPage > totalPages) {
+      currentPage = totalPages;
+      return loadDocs();
+    }
+    const documents = result.content;
+    $('#docCount').textContent = result.totalElements;
+    $('#pageInfo').textContent = `${currentPage} / ${totalPages}`;
+    $('#prevPage').disabled = currentPage === 1;
+    $('#nextPage').disabled = currentPage === totalPages;
+    const confirmableCount = result.confirmableElements;
     $('#confirmAll').hidden = confirmableCount === 0;
     $('#confirmAll').disabled = confirmingDocuments.size > 0;
     $('#confirmAll').textContent = confirmingDocuments.size > 0
@@ -146,15 +156,25 @@ async function upload(files) {
     if (!response.ok) throw Error(data.message || '上传失败');
     toast(`${data.length} 个文件上传完成，请在列表中确认解析`);
     $('#file').value = '';
+    currentPage = 1;
     loadDocs();
   } catch (error) {
     toast(error.message || '上传失败');
   }
 }
 async function confirmAll() {
-  const documents = documentsCache.filter(document => document.confirmable);
-  if (!documents.length || confirmingDocuments.size > 0
-      || !confirm(`将统一解析 ${documents.length} 个文档，是否继续？`)) return;
+  if (confirmingDocuments.size > 0) return;
+  let documents;
+  try {
+    const response = await fetch('/api/documents/confirmable');
+    const data = await response.json();
+    if (!response.ok) throw Error(data.message || '无法读取待解析文档');
+    documents = data;
+  } catch (error) {
+    toast(error.message || '无法读取待解析文档');
+    return;
+  }
+  if (!documents.length || !confirm(`将统一解析 ${documents.length} 个文档，是否继续？`)) return;
   documents.forEach(document => confirmingDocuments.add(document.id));
   let succeeded = 0;
   let failed = 0;
@@ -207,5 +227,17 @@ const drop = $('#drop');
 }));
 drop.ondrop = event => upload(event.dataTransfer.files);
 $('#confirmAll').onclick = confirmAll;
+$('#prevPage').onclick = () => {
+  if (currentPage > 1) {
+    currentPage--;
+    loadDocs();
+  }
+};
+$('#nextPage').onclick = () => {
+  if (currentPage < totalPages) {
+    currentPage++;
+    loadDocs();
+  }
+};
 window.removeDoc = removeDoc;
 loadDocs();

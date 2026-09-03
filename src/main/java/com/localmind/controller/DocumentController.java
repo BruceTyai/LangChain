@@ -1,5 +1,6 @@
 package com.localmind.controller;
 
+import com.localmind.dto.DocumentPageResponse;
 import com.localmind.dto.DocumentResponse;
 import com.localmind.dto.DocumentUploadCommand;
 import com.localmind.service.DocumentService;
@@ -29,8 +30,16 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<DocumentResponse> list() {
-        return documentService.list();
+    public DocumentPageResponse list(@RequestParam(defaultValue = "0") int page) {
+        if (page < 0) {
+            throw new IllegalArgumentException("页码不能小于 0");
+        }
+        return documentService.page(page, 10);
+    }
+
+    @GetMapping("/confirmable")
+    public List<DocumentResponse> confirmable() {
+        return documentService.confirmable();
     }
 
     @PostMapping

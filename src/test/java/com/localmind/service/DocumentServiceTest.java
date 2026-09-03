@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.localmind.dao.entity.KnowledgeDocument;
 import com.localmind.dao.repository.KnowledgeDocumentRepository;
+import com.localmind.dto.DocumentPageResponse;
 import com.localmind.dto.DocumentResponse;
 import com.localmind.dto.DocumentUploadCommand;
 import dev.langchain4j.data.segment.TextSegment;
@@ -29,8 +30,12 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -42,6 +47,27 @@ class DocumentServiceTest {
     @Mock EmbeddingModel embeddingModel;
     @Mock EmbeddingStore<TextSegment> embeddingStore;
     @TempDir Path uploadDirectory;
+
+    @Test
+    void pageReturnsOnlyRequestedDocumentsAndGlobalMetadata() {
+        KnowledgeDocument document = documentWithStatus(KnowledgeDocument.Status.PENDING);
+        document.setStagedFile("pending.upload");
+        when(repository.findAll(any(Pageable.class))).thenReturn(
+                new PageImpl<>(List.of(document), PageRequest.of(1, 10), 21));
+        when(repository.countByStatusInAndStagedFileIsNotNull(any())).thenReturn(3L);
+
+        DocumentPageResponse response = service().page(1, 10);
+
+        assertEquals(1, response.content().size());
+        assertEquals(21, response.totalElements());
+        assertEquals(3, response.totalPages());
+        assertEquals(1, response.page());
+        assertEquals(3, response.confirmableElements());
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository).findAll(pageable.capture());
+        assertEquals(1, pageable.getValue().getPageNumber());
+        assertEquals(10, pageable.getValue().getPageSize());
+    }
 
     @Test
     void uploadOnlyStagesFileWithoutParsingOrEmbedding() throws IOException {

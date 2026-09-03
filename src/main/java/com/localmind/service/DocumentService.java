@@ -2,6 +2,7 @@ package com.localmind.service;
 
 import com.localmind.dao.entity.KnowledgeDocument;
 import com.localmind.dao.repository.KnowledgeDocumentRepository;
+import com.localmind.dto.DocumentPageResponse;
 import com.localmind.dto.DocumentResponse;
 import com.localmind.dto.DocumentUploadCommand;
 import dev.langchain4j.data.document.Document;
@@ -29,6 +30,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,8 +67,21 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentResponse> list() {
-        return repository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+    public DocumentPageResponse page(int page, int size) {
+        Page<KnowledgeDocument> documents = repository.findAll(
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        return new DocumentPageResponse(
+                documents.stream().map(this::toResponse).toList(),
+                documents.getTotalElements(),
+                documents.getTotalPages(),
+                documents.getNumber(),
+                repository.countByStatusInAndStagedFileIsNotNull(confirmableStatuses()));
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentResponse> confirmable() {
+        return repository.findAllByStatusInAndStagedFileIsNotNullOrderByCreatedAtDesc(confirmableStatuses()).stream()
+                .filter(document -> document.getStagedFile() != null)
                 .map(this::toResponse)
                 .toList();
     }
@@ -253,6 +269,10 @@ public class DocumentService {
             message += "；" + cleanupError;
         }
         return message.substring(0, Math.min(message.length(), 1000));
+    }
+
+    private List<KnowledgeDocument.Status> confirmableStatuses() {
+        return List.of(KnowledgeDocument.Status.PENDING, KnowledgeDocument.Status.FAILED);
     }
 
     private DocumentResponse toResponse(KnowledgeDocument document) {
