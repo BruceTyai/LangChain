@@ -2,6 +2,12 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => document.querySelectorAll(selector);
 let busy = false;
 const confirmingDocuments = new Set();
+let showSources = true;
+try {
+  showSources = localStorage.getItem('showSources') !== 'false';
+} catch {
+  // Browsers may block storage; keep the preference in memory for this session.
+}
 let totalPages = 1;
 let processingDocumentId = null;
 let currentPage = 1;
@@ -12,6 +18,32 @@ const toast = message => {
   element.classList.add('show');
   setTimeout(() => element.classList.remove('show'), 2400);
 };
+
+function answerWithoutSources(answer) {
+  return answer.replace(/\[资料\s*\d+(?:\s*·\s*[^\r\n]+?)?\](?:[ \t]|&#x20;|&#32;)*/g, '');
+}
+
+function applySourceVisibility() {
+  $('#showSources').checked = showSources;
+  $$('.sources').forEach(element => element.hidden = !showSources);
+  $$('.bubble.ai').forEach(bubble => {
+    const answer = bubble.querySelector('.answer-text');
+    if (answer && typeof bubble.sourceAnswer === 'string') {
+      answer.textContent = showSources ? bubble.sourceAnswer : answerWithoutSources(bubble.sourceAnswer);
+    }
+  });
+}
+
+$('#showSources').onchange = event => {
+  showSources = event.target.checked;
+  try {
+    localStorage.setItem('showSources', showSources);
+  } catch {
+    // The toggle still works even when the browser blocks preference storage.
+  }
+  applySourceVisibility();
+};
+applySourceVisibility();
 
 function switchView(view) {
   $$('nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
@@ -70,7 +102,9 @@ $('#chatForm').onsubmit = async event => {
     const sources = data.sources?.length
       ? `<details class="sources"><summary>查看 ${data.sources.length} 个引用来源</summary>${data.sources.map(source => `<div class="source"><b>[资料 ${source.index}] ${escapeHtml(source.name || '未知来源')}</b><br>${escapeHtml(source.excerpt)} · ${(source.score * 100).toFixed(0)}% 匹配</div>`).join('')}</details>`
       : '';
-    waiting.querySelector('.body').innerHTML = escapeHtml(data.answer) + sources;
+    waiting.sourceAnswer = data.answer.trim();
+    waiting.querySelector('.body').innerHTML = `<span class="answer-text"></span>${sources}`;
+    applySourceVisibility();
   } catch (error) {
     waiting.querySelector('.body').textContent = `出错了：${error.message}`;
   } finally {
