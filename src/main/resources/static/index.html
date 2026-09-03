@@ -1,14 +1,14 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LocalMind · 本地知识库</title><link rel="stylesheet" href="/style.css"></head>
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>技术保障部知识库系统</title><link rel="stylesheet" href="/style.css"></head>
 <body><div class="shell">
- <aside><div class="brand"><span class="mark">L</span><div><b>LocalMind</b><small>LOCAL KNOWLEDGE</small></div></div>
+ <aside><div class="brand"><span class="mark">技</span><div><b>技术保障部知识库系统</b><small>TECH SUPPORT KNOWLEDGE</small></div></div>
   <button class="new" id="newChat">＋ 新对话 <kbd>⌘ K</kbd></button>
   <nav><span>工作区</span><button class="active" data-view="chat"><i>⌁</i>知识问答</button><button data-view="docs"><i>▤</i>知识库 <em id="docCount">0</em></button></nav>
   <div class="stack"><span>运行栈</span><p><i class="dot ok"></i>deepseek-r1:7b</p><p><i class="dot"></i>bge-m3:latest</p><p><i class="dot"></i>Chroma · MySQL</p></div>
-  <div class="user"><span>LM</span><div><b>本地工作区</b><small>数据不离开本机</small></div><i>•••</i></div>
+  <div class="user"><span>技保</span><div><b>技术保障部</b><small>内部知识工作区</small></div><i>•••</i></div>
  </aside>
  <main><header><div><b id="pageTitle">知识问答</b><span>／</span><small id="subtitle">基于你的资料进行可靠回答</small></div><button class="status"><i></i>本地运行</button></header>
   <section id="chatView" class="view active"><div id="messages" class="messages"><div class="hero"><span class="spark">✦</span><h1>今天想了解什么？</h1><p>我会从你的知识库中检索相关内容，并给出带来源的回答。</p><div class="prompts"><button>总结知识库的核心内容 <i>↗</i></button><button>有哪些值得关注的信息？ <i>↗</i></button><button>对比文档中的关键观点 <i>↗</i></button></div></div></div>
-   <form id="chatForm" class="composer"><textarea id="question" rows="1" placeholder="询问你的知识库…"></textarea><div><span><button type="button" class="tool">＋</button><small>使用 <b>deepseek-r1:7b</b></small></span><button id="send" class="send" aria-label="发送">↑</button></div></form><p class="hint">LocalMind 可能会出错，请核对重要信息与引用来源。</p>
+   <form id="chatForm" class="composer"><textarea id="question" rows="1" placeholder="询问你的知识库…"></textarea><div><span><button type="button" class="tool">＋</button><small>使用 <b>deepseek-r1:7b</b></small></span><button id="send" class="send" aria-label="发送">↑</button></div></form><p class="hint">技术保障部知识库系统可能会出错，请核对重要信息与引用来源。</p>
   </section>
   <section id="docsView" class="view docs"><div class="docs-head"><div><h1>知识库</h1><p>上传资料，让模型基于你的内容回答问题。</p></div><div class="docs-actions"><button id="confirmAll" class="confirm-all" hidden>统一解析</button><label class="upload">＋ 上传文档<input type="file" id="file" accept=".pdf,.doc,.docx,.txt,.md,.html,.csv" multiple hidden></label></div></div>
    <div id="drop" class="drop"><span>⇧</span><b>拖放文件到这里</b><p>支持 PDF、Word、Markdown、TXT、HTML、CSV，单次上传合计最大 30MB</p></div>

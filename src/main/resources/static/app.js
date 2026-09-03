@@ -44,7 +44,7 @@ function addBubble(type, html) {
   if ($('.hero')) $('#messages').innerHTML = '';
   const element = document.createElement('div');
   element.className = `bubble ${type}`;
-  element.innerHTML = `<div class="who">${type === 'user' ? 'YOU' : 'LOCALMIND'}</div><div class="body">${html}</div>`;
+  element.innerHTML = `<div class="who">${type === 'user' ? 'YOU' : '技术保障部知识库系统'}</div><div class="body">${html}</div>`;
   $('#messages').append(element);
   $('#messages').scrollTop = $('#messages').scrollHeight;
   return element;
