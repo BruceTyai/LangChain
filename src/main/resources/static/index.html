@@ -1,30 +1,109 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>技术保障部知识库系统</title><link rel="stylesheet" href="/style.css"></head>
-<body><div class="shell">
- <aside><div class="brand"><span class="mark">技</span><div><b>技术保障部知识库系统</b><small>TECH SUPPORT KNOWLEDGE</small></div></div>
-  <button class="new" id="newChat">＋ 新对话 <kbd>⌘ K</kbd></button>
-  <nav><span>工作区</span><button class="active" data-view="chat"><i>⌁</i>知识问答</button></nav>
-  <div class="account">
-   <button class="user" id="userMenuToggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="userMenu"><span id="userAvatar">用户</span><div><b id="currentUser">正在加载</b><small id="currentRole">身份验证中</small></div><i class="user-chevron">⌃</i></button>
-   <div class="user-menu" id="userMenu" hidden>
-    <div class="menu-stack">
-     <span>运行栈</span>
-     <p><i class="dot ok"></i>deepseek-r1:7b</p>
-     <p><i class="dot"></i>bge-m3:latest</p>
-     <p><i class="dot"></i>Chroma · MySQL</p>
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>技术保障部知识库系统</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <div class="shell">
+        <aside>
+            <div class="brand"><span class="mark">技</span>
+                <div><b>技术保障部知识库系统</b><small>TECH SUPPORT KNOWLEDGE</small></div>
+            </div>
+            <button class="new" id="newChat">＋ 新对话 <kbd>⌘ K</kbd></button>
+            <nav><span>工作区</span><button class="active" data-view="chat"><i>⌁</i>知识问答</button></nav>
+            <div class="account">
+                <button class="user" id="userMenuToggle" type="button" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="userMenu"><span id="userAvatar">用户</span>
+                    <div><b id="currentUser">正在加载</b><small id="currentRole">身份验证中</small></div><i
+                        class="user-chevron">⌃</i>
+                </button>
+                <div class="user-menu" id="userMenu" hidden>
+                    <div class="menu-stack">
+                        <span>运行栈</span>
+                        <p><i class="dot ok"></i>deepseek-r1:7b</p>
+                        <p><i class="dot"></i>bge-m3:latest</p>
+                        <p><i class="dot"></i>Chroma · MySQL</p>
+                    </div>
+                    <button id="docNav" type="button" data-view="docs"><i>▤</i><span>知识库管理</span><em
+                            id="docCount">0</em></button>
+                    <button id="userNav" type="button" data-view="users"><i>♙</i><span>用户管理</span></button>
+                    <button id="logout" class="menu-logout" type="button"><i>↪</i><span>退出登录</span></button>
+                </div>
+            </div>
+        </aside>
+        <main>
+            <header>
+                <div><b id="pageTitle">知识问答</b><span>／</span><small id="subtitle">基于你的资料进行可靠回答</small></div><button
+                    class="status"><i></i>本地运行</button>
+            </header>
+            <section id="chatView" class="view active">
+                <div id="messages" class="messages">
+                    <div class="hero"><span class="spark">✦</span>
+                        <h1>今天想了解什么？</h1>
+                        <p>我会从你的知识库中检索相关内容，并给出带来源的回答。</p>
+                        <div class="prompts"><button>值班电话 <i>↗</i></button><button>新采编系统负责人是谁？
+                                <i>↗</i></button><button>对比文档中的关键观点 <i>↗</i></button></div>
+                    </div>
+                </div>
+                <form id="chatForm" class="composer"><textarea id="question" rows="1" placeholder="询问你的知识库…"></textarea>
+                    <div><span><label class="source-toggle" title="控制回答中是否显示引用来源"><input type="checkbox"
+                                    id="showSources" checked><span
+                                    class="toggle-track"><i></i></span><span>显示引用</span></label><small>使用
+                                <b>deepseek-r1:7b</b></small></span><button id="send" class="send"
+                            aria-label="发送">↑</button></div>
+                </form>
+                <p class="hint">技术保障部知识库系统可能会出错，请核对重要信息与引用来源。</p>
+            </section>
+            <section id="docsView" class="view docs">
+                <div class="docs-head">
+                    <div>
+                        <h1>知识库</h1>
+                        <p>上传资料，让模型基于你的内容回答问题。</p>
+                    </div>
+                    <div class="docs-actions"><button id="confirmAll" class="confirm-all" hidden>统一解析</button><label
+                            class="upload">＋ 上传文档<input type="file" id="file"
+                                accept=".pdf,.doc,.docx,.txt,.md,.html,.csv" multiple hidden></label></div>
+                </div>
+                <div id="drop" class="drop"><span>⇧</span><b>拖放文件到这里</b>
+                    <p>支持 PDF、Word、Markdown、TXT、HTML、CSV，单次上传合计最大 30MB</p>
+                </div>
+                <div class="table">
+                    <div class="thead"><span>文档</span><span>分块</span><span>状态</span><span>上传时间</span><span></span></div>
+                    <div id="docList"></div>
+                </div>
+                <div id="pagination" class="pagination"><button id="prevPage">上一页</button><span id="pageInfo">1 /
+                        1</span><button id="nextPage">下一页</button></div>
+            </section>
+            <section id="usersView" class="view docs">
+                <div class="docs-head">
+                    <div>
+                        <h1>用户管理</h1>
+                        <p>创建账号并管理系统访问权限。</p>
+                    </div><label class="anonymous-setting"><input id="allowAnonymous" type="checkbox">
+                        <span class="anonymous-toggle" aria-hidden="true"><i></i></span>
+                        <span class="anonymous-copy"><b>允许匿名用户</b><small>无需登录即可使用知识问答</small></span>
+                    </label>
+                </div>
+                <form id="userForm" class="user-form"><input id="newUsername" placeholder="用户名（3-30位）" required><input
+                        id="newPassword" type="password" placeholder="初始密码（至少6位）" required><select id="newRole">
+                        <option value="USER">普通用户</option>
+                        <option value="ADMIN">管理员</option>
+                    </select><button type="submit">创建用户</button></form>
+                <div class="table user-table">
+                    <div class="thead"><span>用户</span><span>角色</span><span>状态</span><span>创建时间</span><span>操作</span>
+                    </div>
+                    <div id="userList"></div>
+                </div>
+            </section>
+        </main>
     </div>
-    <button id="docNav" type="button" data-view="docs"><i>▤</i><span>知识库管理</span><em id="docCount">0</em></button>
-    <button id="userNav" type="button" data-view="users"><i>♙</i><span>用户管理</span></button>
-    <button id="logout" class="menu-logout" type="button"><i>↪</i><span>退出登录</span></button>
-   </div>
-  </div>
- </aside>
- <main><header><div><b id="pageTitle">知识问答</b><span>／</span><small id="subtitle">基于你的资料进行可靠回答</small></div><button class="status"><i></i>本地运行</button></header>
-  <section id="chatView" class="view active"><div id="messages" class="messages"><div class="hero"><span class="spark">✦</span><h1>今天想了解什么？</h1><p>我会从你的知识库中检索相关内容，并给出带来源的回答。</p><div class="prompts"><button>总结知识库的核心内容 <i>↗</i></button><button>有哪些值得关注的信息？ <i>↗</i></button><button>对比文档中的关键观点 <i>↗</i></button></div></div></div>
-   <form id="chatForm" class="composer"><textarea id="question" rows="1" placeholder="询问你的知识库…"></textarea><div><span><label class="source-toggle" title="控制回答中是否显示引用来源"><input type="checkbox" id="showSources" checked><span class="toggle-track"><i></i></span><span>显示引用</span></label><small>使用 <b>deepseek-r1:7b</b></small></span><button id="send" class="send" aria-label="发送">↑</button></div></form><p class="hint">技术保障部知识库系统可能会出错，请核对重要信息与引用来源。</p>
-  </section>
-  <section id="docsView" class="view docs"><div class="docs-head"><div><h1>知识库</h1><p>上传资料，让模型基于你的内容回答问题。</p></div><div class="docs-actions"><button id="confirmAll" class="confirm-all" hidden>统一解析</button><label class="upload">＋ 上传文档<input type="file" id="file" accept=".pdf,.doc,.docx,.txt,.md,.html,.csv" multiple hidden></label></div></div>
-   <div id="drop" class="drop"><span>⇧</span><b>拖放文件到这里</b><p>支持 PDF、Word、Markdown、TXT、HTML、CSV，单次上传合计最大 30MB</p></div>
-   <div class="table"><div class="thead"><span>文档</span><span>分块</span><span>状态</span><span>上传时间</span><span></span></div><div id="docList"></div></div>
-   <div id="pagination" class="pagination"><button id="prevPage">上一页</button><span id="pageInfo">1 / 1</span><button id="nextPage">下一页</button></div>
-  </section>
-  <section id="usersView" class="view docs"><div class="docs-head"><div><h1>用户管理</h1><p>创建账号并管理系统访问权限。</p></div></div><form id="userForm" class="user-form"><input id="newUsername" placeholder="用户名（3-30位）" required><input id="newPassword" type="password" placeholder="初始密码（至少6位）" required><select id="newRole"><option value="USER">普通用户</option><option value="ADMIN">管理员</option></select><button type="submit">创建用户</button></form><div class="table user-table"><div class="thead"><span>用户</span><span>角色</span><span>状态</span><span>创建时间</span><span>操作</span></div><div id="userList"></div></div></section> </main></div><div id="toast"></div><script src="/app.js"></script></body></html>
+    <div id="toast"></div>
+    <script src="/app.js"></script>
+</body>
+
+</html>

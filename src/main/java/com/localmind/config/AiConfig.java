@@ -15,15 +15,21 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class AiConfig {
-    @Bean ChatModel chatModel(@Value("${app.ollama.base-url}") String url, @Value("${app.ollama.chat-model}") String model) {
+    @Bean ChatModel chatModel(@Value("${app.ollama.base-url}") String url,
+            @Value("${app.ollama.chat-model}") String model,
+            @Value("${app.ollama.temperature}") double temperature,
+            @Value("${app.ollama.seed}") int seed,
+            @Value("${app.ollama.think}") boolean think,
+            @Value("${app.ollama.log-requests}") boolean logRequests,
+            @Value("${app.ollama.log-responses}") boolean logResponses) {
         return OllamaChatModel.builder()
         .baseUrl(url)
         .modelName(model)
-        .temperature(0.0)
-        .seed(42)
-        .think(false)
-        .logRequests(true)
-        .logResponses(true)
+        .temperature(temperature)
+        .seed(seed)
+        .think(think)
+        .logRequests(logRequests)
+        .logResponses(logResponses)
         .timeout(Duration.ofMinutes(5)).build();
     }
     @Bean EmbeddingModel embeddingModel(@Value("${app.ollama.base-url}") String url, @Value("${app.ollama.embedding-model}") String model) {

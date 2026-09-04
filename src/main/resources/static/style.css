@@ -19,3 +19,21 @@
 .user-menu i{font-style:normal;color:#8f8a81}
 .user-menu em{min-width:20px;border-radius:10px;background:#35352e;padding:0 6px;font-style:normal;font-size:10px;text-align:center}
 .user-menu .menu-logout{margin-top:6px;padding-top:10px;border-top:1px solid var(--line-soft);border-radius:0 0 6px 6px;color:var(--danger)}
+/* Keep the application frame fixed; scroll long conversations inside the message list. */
+html,body{height:100%;overflow:hidden}
+.shell{height:100vh;height:100dvh;overflow:hidden}
+main{height:100%;min-height:0;overflow:hidden}
+header{flex:0 0 61px}
+#chatView{min-height:0;overflow:hidden}
+.messages{min-height:0;overscroll-behavior:contain}
+.anonymous-setting{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-soft);padding:9px 12px;color:var(--text);cursor:pointer}
+.anonymous-setting input{position:absolute;opacity:0;pointer-events:none}
+.anonymous-toggle{display:block;position:relative;flex:0 0 36px;width:36px;height:20px;border:1px solid #5a554c;border-radius:11px;background:#1f1e1b;transition:.18s ease}
+.anonymous-toggle i{position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#89837a;transition:.18s ease}
+.anonymous-setting input:checked+.anonymous-toggle{border-color:#9b654f;background:var(--accent-soft)}
+.anonymous-setting input:checked+.anonymous-toggle i{background:var(--accent);transform:translateX(16px)}
+.anonymous-setting input:focus-visible+.anonymous-toggle{box-shadow:0 0 0 3px #da8a6725}
+.anonymous-copy{display:flex;flex-direction:column}
+.anonymous-setting small{color:var(--muted);font-size:10px;font-weight:normal}
+.anonymous-setting:has(input:disabled){opacity:.6;cursor:default}
+.user-table button:disabled{opacity:.45;cursor:not-allowed}

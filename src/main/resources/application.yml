@@ -12,10 +12,17 @@ spring:
     max-request-size: 31MB
 server.port: ${SERVER_PORT:8080}
 app:
+  security:
+    allow-anonymous: ${ALLOW_ANONYMOUS:false}
   ollama:
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
     chat-model: ${OLLAMA_CHAT_MODEL:deepseek-r1:7b}
     embedding-model: ${OLLAMA_EMBEDDING_MODEL:bge-m3:latest}
+    temperature: ${OLLAMA_TEMPERATURE:0.0}
+    seed: ${OLLAMA_SEED:42}
+    think: ${OLLAMA_THINK:false}
+    log-requests: ${OLLAMA_LOG_REQUESTS:true}
+    log-responses: ${OLLAMA_LOG_RESPONSES:true}
   chroma:
     base-url: ${CHROMA_BASE_URL:http://localhost:8000}
     collection: ${CHROMA_COLLECTION:localmind_documents}

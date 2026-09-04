@@ -1,9 +1,11 @@
 package com.localmind.config;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,6 +18,7 @@ import com.localmind.dao.entity.AppUser;
 import com.localmind.dao.repository.AppUserRepository;
 import com.localmind.dto.ChatResponse;
 import com.localmind.dto.DocumentPageResponse;
+import com.localmind.service.AnonymousAccessService;
 import com.localmind.service.ChatService;
 import com.localmind.service.DocumentService;
 import com.localmind.service.UserService;
@@ -58,6 +61,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private UserService userService;
+
+    @MockitoBean
+    private AnonymousAccessService anonymousAccessService;
 
     @MockitoBean
     private AppUserRepository appUserRepository;
@@ -148,5 +154,63 @@ class SecurityConfigTest {
 
         mockMvc.perform(get("/api/auth/me").session(session))
                 .andExpect(status().isUnauthorized());
+    }
+    @Test
+    void anonymousCannotChatWhenDisabled() throws Exception {
+        mockMvc.perform(post("/api/chat")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"anonymous question\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anonymousCanOnlyUseChatWhenEnabled() throws Exception {
+        when(anonymousAccessService.isAllowed()).thenReturn(true);
+        when(chatService.ask("anonymous question")).thenReturn(new ChatResponse("anonymous question", List.of()));
+
+        mockMvc.perform(post("/api/chat")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"anonymous question\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer").value("anonymous question"));
+
+        mockMvc.perform(get("/api/users"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anonymousSessionReturnsAnonymousRoleWhenEnabled() throws Exception {
+        when(anonymousAccessService.isAllowed()).thenReturn(true);
+
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("\u8bbf\u5ba2"))
+                .andExpect(jsonPath("$.role").value("ANONYMOUS"))
+                .andExpect(jsonPath("$.csrfToken").isNotEmpty());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void administratorCanUpdateAnonymousAccessSetting() throws Exception {
+        when(anonymousAccessService.setAllowed(true)).thenReturn(true);
+
+        mockMvc.perform(put("/api/users/anonymous-access")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"allowed\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.allowed").value(true));
+    }
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void rejectsAnonymousAccessSettingWithoutAllowedValue() throws Exception {
+        mockMvc.perform(put("/api/users/anonymous-access")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(anonymousAccessService);
     }
 }

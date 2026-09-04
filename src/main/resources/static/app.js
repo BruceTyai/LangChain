@@ -5,6 +5,7 @@ const confirmingDocuments = new Set();
 let csrfHeader;
 let csrfToken;
 let isAdmin = false;
+let isAnonymous = false;
 
 async function loadSession() {
   const response = await fetch('/api/auth/me');
@@ -16,11 +17,13 @@ async function loadSession() {
   csrfHeader = session.csrfHeader;
   csrfToken = session.csrfToken;
   isAdmin = session.role === 'ADMIN';
+  isAnonymous = session.role === 'ANONYMOUS';
   $('#currentUser').textContent = session.username;
-  $('#currentRole').textContent = isAdmin ? '管理员' : '普通用户';
+  $('#currentRole').textContent = isAnonymous ? '匿名访问' : isAdmin ? '管理员' : '普通用户';
   $('#userAvatar').textContent = session.username.slice(0, 2).toUpperCase();
   $('#docNav').hidden = !isAdmin;
   $('#userNav').hidden = !isAdmin;
+  $('#logout span').textContent = isAnonymous ? '登录' : '退出登录';
 }
 
 const sessionReady = loadSession();
@@ -348,11 +351,16 @@ $('#nextPage').onclick = () => {
   }
 };
 $('#logout').onclick = async () => {
+  if (isAnonymous) { window.location.href = '/login'; return; }
   await apiFetch('/logout', {method: 'POST'});
   window.location.href = '/login?logout';
 };
 async function loadUsers() {
   try {
+    const settingResponse = await apiFetch('/api/users/anonymous-access');
+    const setting = await settingResponse.json();
+    if (!settingResponse.ok) throw Error(setting.message || '无法读取匿名访问设置');
+    $('#allowAnonymous').checked = setting.allowed;
     const response = await apiFetch('/api/users');
     const users = await response.json();
     if (!response.ok) throw Error(users.message || '无法读取用户列表');
@@ -362,14 +370,35 @@ async function loadUsers() {
         '<option value="USER" ' + (user.role === 'USER' ? 'selected' : '') + '>普通用户</option>' +
         '<option value="ADMIN" ' + (user.role === 'ADMIN' ? 'selected' : '') + '>管理员</option>' +
       '</select>' +
-      '<label class="user-enabled"><input type="checkbox" ' + (user.enabled ? 'checked' : '') +
+      '<label class="user-enabled"><input type="checkbox" ' + (user.enabled ? 'checked' : '') + (user.username === $('#currentUser').textContent ? ' disabled title="不能禁用当前账号"' : '') +
         ' onchange="updateUser(' + user.id + ', &quot;' + user.role + '&quot;, this.checked)">启用</label>' +
       '<span>' + new Date(user.createdAt).toLocaleString('zh-CN') + '</span>' +
       '<div class="user-actions"><button onclick="resetUserPassword(' + user.id + ')">重置密码</button>' +
-      '<button class="danger" onclick="deleteUser(' + user.id + ')">删除</button></div></div>').join('') :
+      '<button class="danger" onclick="deleteUser(' + user.id + ')" ' + (user.username === $('#currentUser').textContent ? 'disabled title="不能删除当前账号"' : '') + '>删除</button></div></div>').join('') :
       '<div class="empty">暂无用户</div>';
   } catch (error) { toast(error.message || '无法读取用户列表'); }
 }
+
+$('#allowAnonymous').onchange = async event => {
+  const checkbox = event.target;
+  checkbox.disabled = true;
+  try {
+    const response = await apiFetch('/api/users/anonymous-access', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({allowed: checkbox.checked})
+    });
+    const setting = await response.json();
+    if (!response.ok) throw Error(setting.message || '匿名访问设置保存失败');
+    checkbox.checked = setting.allowed;
+    toast(setting.allowed ? '已允许匿名用户访问' : '已禁止匿名用户访问');
+  } catch (error) {
+    checkbox.checked = !checkbox.checked;
+    toast(error.message || '匿名访问设置保存失败');
+  } finally {
+    checkbox.disabled = false;
+  }
+};
 
 async function updateUser(id, role, enabled) {
   try {

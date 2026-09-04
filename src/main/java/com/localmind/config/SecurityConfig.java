@@ -1,5 +1,6 @@
 package com.localmind.config;
 
+import com.localmind.service.AnonymousAccessService;
 import com.localmind.dao.entity.AppUser;
 import com.localmind.dao.repository.AppUserRepository;
 import org.springframework.boot.ApplicationRunner;
@@ -8,6 +9,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.User;
@@ -65,11 +68,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, SessionRegistry sessions) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, SessionRegistry sessions,
+            AnonymousAccessService anonymousAccess) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/login", "/login.css", "/error").permitAll()
                         .requestMatchers("/api/documents/**", "/api/users/**").hasRole("ADMIN")
-                        .requestMatchers("/api/chat/**", "/api/auth/me").hasAnyRole("ADMIN", "USER")
+                        .requestMatchers("/", "/index.html", "/app.js", "/style.css", "/favicon.ico",
+                                "/api/chat/**", "/api/auth/me")
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            boolean signedIn = current != null && current.isAuthenticated()
+                                    && !(current instanceof AnonymousAuthenticationToken);
+                            return new AuthorizationDecision(signedIn || anonymousAccess.isAllowed());
+                        })
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginPage("/login")
