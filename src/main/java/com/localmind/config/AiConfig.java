@@ -16,7 +16,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AiConfig {
     @Bean ChatModel chatModel(@Value("${app.ollama.base-url}") String url, @Value("${app.ollama.chat-model}") String model) {
-        return OllamaChatModel.builder().baseUrl(url).modelName(model).temperature(0.2).timeout(Duration.ofMinutes(5)).build();
+        return OllamaChatModel.builder()
+        .baseUrl(url)
+        .modelName(model)
+        .temperature(0.0)
+        .seed(42)
+        .think(false)
+        .logRequests(true)
+        .logResponses(true)
+        .timeout(Duration.ofMinutes(5)).build();
     }
     @Bean EmbeddingModel embeddingModel(@Value("${app.ollama.base-url}") String url, @Value("${app.ollama.embedding-model}") String model) {
         return OllamaEmbeddingModel.builder().baseUrl(url).modelName(model).timeout(Duration.ofMinutes(3)).build();
