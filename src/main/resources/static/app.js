@@ -93,13 +93,42 @@ function switchView(view) {
   $$('nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach(element => element.classList.remove('active'));
   $(`#${view}View`).classList.add('active');
-  $('#pageTitle').textContent = view === 'chat' ? '知识问答' : '知识库';
-  $('#subtitle').textContent = view === 'chat' ? '基于你的资料进行可靠回答' : '管理与索引本地资料';
+  const viewLabels = {
+    chat: ['知识问答', '基于你的资料进行可靠回答'],
+    docs: ['知识库', '管理与索引本地资料'],
+    users: ['用户管理', '管理系统用户与访问权限']
+  };
+  const [title, subtitle] = viewLabels[view];
+  $('#pageTitle').textContent = title;
+  $('#subtitle').textContent = subtitle;
+  closeUserMenu();
   if (view === 'docs') loadDocs();
   if (view === 'users') loadUsers();
 }
 
-$$('nav button').forEach(button => button.onclick = () => switchView(button.dataset.view));
+$$('[data-view]').forEach(button => button.onclick = () => switchView(button.dataset.view));
+
+function closeUserMenu() {
+  $('#userMenu').hidden = true;
+  $('#userMenuToggle').setAttribute('aria-expanded', 'false');
+}
+
+$('#userMenuToggle').onclick = event => {
+  event.stopPropagation();
+  const menu = $('#userMenu');
+  const willOpen = menu.hidden;
+  menu.hidden = !willOpen;
+  $('#userMenuToggle').setAttribute('aria-expanded', String(willOpen));
+};
+
+$('#userMenu').onclick = event => event.stopPropagation();
+document.addEventListener('click', closeUserMenu);
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('#userMenu').hidden) {
+    closeUserMenu();
+    $('#userMenuToggle').focus();
+  }
+});
 $('#newChat').onclick = () => {
   switchView('chat');
   $('#messages').innerHTML = hero;
