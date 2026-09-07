@@ -66,7 +66,10 @@ const toast = message => {
 };
 
 function answerWithoutSources(answer) {
-  return answer.replace(/\[资料\s*\d+(?:\s*·\s*[^\r\n]+?)?\](?:[ \t]|&#x20;|&#32;)*/g, '');
+  return answer
+    .replace(/\[资料\s*\d+(?:\s*·\s*[^\r\n]+?)?\](?:[ \t]|&#x20;|&#32;)*/g, '')
+    .replace(/(?:引用|参考)?来源\s*[：:]\s*[^。！？!?\r\n]*(?:[。！？!?]|$)/g, '')
+    .trim();
 }
 
 function applySourceVisibility() {
@@ -138,7 +141,11 @@ $('#newChat').onclick = () => {
 };
 
 const hero = $('#messages').innerHTML;
-$$('.prompts button').forEach(button => button.onclick = () => {
+// The hero is recreated when a new chat starts. Delegate prompt clicks to the
+// persistent messages container so the recreated buttons keep working.
+$('#messages').addEventListener('click', event => {
+  const button = event.target.closest('.prompts button');
+  if (!button || !$('#messages').contains(button)) return;
   $('#question').value = button.textContent.replace('↗', '').trim();
   $('#chatForm').requestSubmit();
 });
