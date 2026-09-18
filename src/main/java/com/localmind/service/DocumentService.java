@@ -2,6 +2,7 @@ package com.localmind.service;
 
 import com.localmind.dao.entity.KnowledgeDocument;
 import com.localmind.dao.repository.KnowledgeDocumentRepository;
+import com.localmind.dto.DocumentDownload;
 import com.localmind.dto.DocumentPageResponse;
 import com.localmind.dto.DocumentResponse;
 import com.localmind.dto.DocumentUploadCommand;
@@ -144,8 +145,6 @@ public class DocumentService {
             embeddingStore.addAll(embeddings, segments);
             document.setChunkCount(segments.size());
             document.setStatus(KnowledgeDocument.Status.READY);
-            document.setStagedFile(null);
-            registerCommitCleanup(stagedPath);
         } catch (Exception exception) {
             String cleanupError = tryRemoveEmbeddings(document.getId());
             document.setStatus(KnowledgeDocument.Status.FAILED);
@@ -167,6 +166,20 @@ public class DocumentService {
         repository.delete(document);
     }
 
+    @Transactional(readOnly = true)
+    public DocumentDownload download(long id) {
+        KnowledgeDocument document = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("文档不存在"));
+        Path file = resolveStagedFile(document.getStagedFile());
+        if (!Files.isRegularFile(file)) {
+            throw new IllegalStateException("原文件不存在");
+        }
+        try {
+            return new DocumentDownload(file, document.getName(), document.getContentType(), Files.size(file));
+        } catch (IOException exception) {
+            throw new IllegalStateException("读取原文件失败", exception);
+        }
+    }
     @EventListener(ApplicationReadyEvent.class)
     public void cleanupOrphanedStagedFiles() {
         if (!Files.isDirectory(uploadDirectory)) {
@@ -279,6 +292,8 @@ public class DocumentService {
         boolean confirmable = document.getStagedFile() != null
                 && (document.getStatus() == KnowledgeDocument.Status.PENDING
                 || document.getStatus() == KnowledgeDocument.Status.FAILED);
+        boolean downloadable = document.getStagedFile() != null
+                && Files.isRegularFile(resolveStagedFile(document.getStagedFile()));
         return new DocumentResponse(
                 document.getId(),
                 document.getName(),
@@ -288,6 +303,7 @@ public class DocumentService {
                 document.getChunkCount(),
                 document.getErrorMessage(),
                 document.getCreatedAt(),
-                confirmable);
+                confirmable,
+                downloadable);
     }
 }

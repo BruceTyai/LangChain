@@ -11,5 +11,6 @@ public record DocumentResponse(
         int chunkCount,
         String errorMessage,
         Instant createdAt,
-        boolean confirmable) {
+        boolean confirmable,
+        boolean downloadable) {
 }

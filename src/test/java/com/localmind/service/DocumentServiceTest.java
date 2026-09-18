@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.localmind.dao.entity.KnowledgeDocument;
 import com.localmind.dao.repository.KnowledgeDocumentRepository;
+import com.localmind.dto.DocumentDownload;
 import com.localmind.dto.DocumentPageResponse;
 import com.localmind.dto.DocumentResponse;
 import com.localmind.dto.DocumentUploadCommand;
@@ -250,6 +251,34 @@ class DocumentServiceTest {
         verify(repository).delete(document);
     }
 
+    @Test
+    void downloadReturnsTheRetainedOriginalFile() throws IOException {
+        Path original = uploadDirectory.resolve("retained.upload");
+        Files.writeString(original, "原始内容");
+        KnowledgeDocument document = documentWithStatus(KnowledgeDocument.Status.READY);
+        document.setName("资料.txt");
+        document.setContentType("text/plain");
+        document.setStagedFile(original.getFileName().toString());
+        when(repository.findById(42L)).thenReturn(Optional.of(document));
+
+        DocumentDownload download = service().download(42L);
+
+        assertEquals(original, download.path());
+        assertEquals("资料.txt", download.fileName());
+        assertEquals("text/plain", download.contentType());
+        assertEquals(Files.size(original), download.sizeBytes());
+    }
+
+    @Test
+    void downloadRejectsMissingOriginalFile() {
+        KnowledgeDocument document = documentWithStatus(KnowledgeDocument.Status.READY);
+        document.setStagedFile("missing.upload");
+        when(repository.findById(42L)).thenReturn(Optional.of(document));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service().download(42L));
+
+        assertEquals("原文件不存在", exception.getMessage());
+    }
     private DocumentService service() {
         return new DocumentService(repository, embeddingModel, embeddingStore, 700, 100,
                 uploadDirectory.toString());

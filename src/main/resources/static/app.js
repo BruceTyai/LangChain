@@ -57,6 +57,9 @@ try {
 let totalPages = 1;
 let processingDocumentId = null;
 let currentPage = 1;
+let currentDocuments = [];
+const selectedDocumentIds = new Set();
+let batchOperationInProgress = false;
 
 const toast = message => {
   const element = $('#toast');
@@ -67,6 +70,7 @@ const toast = message => {
 
 function answerWithoutSources(answer) {
   return answer
+    .replace(/[（(]\s*(?:引用|参考)?来源\s*[：:]\s*[^）)\r\n]*[）)]/g, '')
     .replace(/\[资料\s*\d+(?:\s*·\s*[^\r\n]+?)?\](?:[ \t]|&#x20;|&#32;)*/g, '')
     .replace(/(?:引用|参考)?来源\s*[：:]\s*[^。！？!?\r\n]*(?:[。！？!?]|$)/g, '')
     .trim();
@@ -183,7 +187,7 @@ $('#chatForm').onsubmit = async event => {
     });
     const data = await response.json();
     if (!response.ok) throw Error(data.message || '请求失败');
-    const sources = data.sources?.length
+    const sources = data.answerType === 'KNOWLEDGE_BASE' && data.sources?.length
       ? `<details class="sources"><summary>查看 ${data.sources.length} 个引用来源</summary>${data.sources.map(source => `<div class="source"><b>[资料 ${source.index}] ${escapeHtml(source.name || '未知来源')}</b><br>${escapeHtml(source.excerpt)} · ${(source.score * 100).toFixed(0)}% 匹配</div>`).join('')}</details>`
       : '';
     waiting.sourceAnswer = data.answer.trim();
@@ -223,41 +227,53 @@ function displayedStatus(document) {
   return document.status;
 }
 
+function isDocumentSelectable(document) {
+  return document.status !== 'PROCESSING' && document.id !== processingDocumentId && !confirmingDocuments.has(document.id);
+}
+
+function updateBatchControls() {
+  const selectableIds = currentDocuments.filter(isDocumentSelectable).map(document => document.id);
+  const selectedCount = selectedDocumentIds.size;
+  $('#downloadSelected').disabled = batchOperationInProgress || selectedCount === 0;
+  $('#deleteSelected').disabled = batchOperationInProgress || selectedCount === 0;
+  $('#downloadSelected').textContent = `下载已选（${selectedCount}）`;
+  $('#deleteSelected').textContent = `删除已选（${selectedCount}）`;
+  const selectAll = $('#selectAll');
+  selectAll.disabled = batchOperationInProgress || selectableIds.length === 0;
+  selectAll.checked = selectableIds.length > 0 && selectableIds.every(id => selectedDocumentIds.has(id));
+  selectAll.indeterminate = selectedCount > 0 && !selectAll.checked;
+}
+
+function clearDocumentSelection() {
+  selectedDocumentIds.clear();
+  updateBatchControls();
+}
+
 async function loadDocs() {
   try {
     const response = await apiFetch(`/api/documents?page=${currentPage - 1}`);
     const result = await response.json();
     if (!response.ok) throw Error(result.message || '无法读取文档列表');
     totalPages = Math.max(1, result.totalPages);
-    if (currentPage > totalPages) {
-      currentPage = totalPages;
-      return loadDocs();
-    }
-    const documents = result.content;
+    if (currentPage > totalPages) { currentPage = totalPages; return loadDocs(); }
+    currentDocuments = result.content;
+    const visibleIds = new Set(currentDocuments.filter(isDocumentSelectable).map(document => document.id));
+    Array.from(selectedDocumentIds).forEach(id => { if (!visibleIds.has(id)) selectedDocumentIds.delete(id); });
     $('#docCount').textContent = result.totalElements;
     $('#pageInfo').textContent = `${currentPage} / ${totalPages}`;
-    $('#prevPage').disabled = currentPage === 1;
-    $('#nextPage').disabled = currentPage === totalPages;
+    $('#prevPage').disabled = currentPage === 1 || batchOperationInProgress;
+    $('#nextPage').disabled = currentPage === totalPages || batchOperationInProgress;
     const confirmableCount = result.confirmableElements;
     $('#confirmAll').hidden = confirmableCount === 0;
-    $('#confirmAll').disabled = confirmingDocuments.size > 0;
-    $('#confirmAll').textContent = confirmingDocuments.size > 0
-      ? `解析队列剩余 ${confirmingDocuments.size} 个文档…`
-      : `统一解析（${confirmableCount}）`;
-    $('#docList').innerHTML = documents.length
-      ? documents.map(document => `<div class="docrow">
-          <div class="docname"><b>${escapeHtml(document.name)}</b><small>${formatSize(document.sizeBytes)}${document.errorMessage ? ` · ${escapeHtml(document.errorMessage)}` : ''}</small></div>
-          <span>${document.chunkCount}</span>
-          <span class="pill ${displayedStatus(document)}">${statusLabels[displayedStatus(document)] || displayedStatus(document)}</span>
-          <span>${new Date(document.createdAt).toLocaleString('zh-CN')}</span>
-          <div class="actions"><button class="del" onclick="removeDoc(${document.id})" ${confirmingDocuments.has(document.id) ? 'disabled' : ''}>×</button></div>
-        </div>`).join('')
-      : '<div class="empty">还没有文档，上传第一份资料开始使用</div>';
-  } catch (error) {
-    toast('无法读取文档列表');
-  }
+    $('#confirmAll').disabled = confirmingDocuments.size > 0 || batchOperationInProgress;
+    $('#confirmAll').textContent = confirmingDocuments.size > 0 ? `解析队列剩余 ${confirmingDocuments.size} 个文档…` : `统一解析（${confirmableCount}）`;
+    $('#docList').innerHTML = currentDocuments.length ? currentDocuments.map(document => {
+      const selectable = isDocumentSelectable(document);
+      return `<div class="docrow"><span><input class="document-select" data-id="${document.id}" type="checkbox" aria-label="选择 ${escapeHtml(document.name)}" ${selectedDocumentIds.has(document.id) ? 'checked' : ''} ${selectable ? '' : 'disabled'}></span><div class="docname"><b>${escapeHtml(document.name)}</b><small>${formatSize(document.sizeBytes)}${document.errorMessage ? ` · ${escapeHtml(document.errorMessage)}` : ''}</small></div><span>${document.chunkCount}</span><span class="pill ${displayedStatus(document)}">${statusLabels[displayedStatus(document)] || displayedStatus(document)}</span><span>${new Date(document.createdAt).toLocaleString('zh-CN')}</span><div class="actions"><button class="del" onclick="removeDoc(${document.id})" ${selectable ? '' : 'disabled'}>×</button></div></div>`;
+    }).join('') : '<div class="empty">还没有文档，上传第一份资料开始使用</div>';
+    updateBatchControls();
+  } catch (error) { toast('无法读取文档列表'); }
 }
-
 const formatSize = size => size < 1024
   ? `${size} B`
   : size < 1048576 ? `${(size / 1024).toFixed(1)} KB` : `${(size / 1048576).toFixed(1)} MB`;
@@ -274,6 +290,7 @@ async function upload(files) {
     if (!response.ok) throw Error(data.message || '上传失败');
     toast(`${data.length} 个文件上传完成，请在列表中确认解析`);
     $('#file').value = '';
+    clearDocumentSelection();
     currentPage = 1;
     loadDocs();
   } catch (error) {
@@ -318,21 +335,69 @@ async function confirmAll() {
     ? `解析完成：${succeeded} 个成功，${failed} 个失败`
     : `解析完成：${succeeded} 个文档已就绪`);
 }
-async function removeDoc(id) {
-  if (!confirm('删除这条文档记录？')) return;
-  try {
-    const response = await apiFetch(`/api/documents/${id}`, {method: 'DELETE'});
-    if (!response.ok) {
-      const data = await response.json();
-      throw Error(data.message || '删除失败');
-    }
-    toast('文档记录已删除');
-    loadDocs();
-  } catch (error) {
-    toast(error.message || '删除失败');
-  }
+async function errorMessage(response, fallback) {
+  try { const data = await response.json(); return data.message || fallback; } catch { return fallback; }
 }
 
+async function deleteDocument(id) {
+  const response = await apiFetch(`/api/documents/${id}`, {method: 'DELETE'});
+  if (!response.ok) throw Error(await errorMessage(response, '删除失败'));
+}
+
+async function removeDoc(id) {
+  if (!confirm('删除这条文档记录？')) return;
+  try { await deleteDocument(id); selectedDocumentIds.delete(id); toast('文档记录已删除'); loadDocs(); }
+  catch (error) { toast(error.message || '删除失败'); }
+}
+
+function downloadFileName(response, fallback) {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encoded) { try { return decodeURIComponent(encoded[1]); } catch { return fallback; } }
+  const plain = disposition.match(/filename="?([^";]+)"?/i);
+  return plain ? plain[1] : fallback;
+}
+
+async function downloadDocument(id) {
+  const response = await apiFetch(`/api/documents/${id}/download`);
+  if (!response.ok) throw Error(await errorMessage(response, '下载失败'));
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = downloadFileName(response, `document-${id}`);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+async function downloadSelected() {
+  const ids = Array.from(selectedDocumentIds);
+  if (!ids.length || batchOperationInProgress) return;
+  batchOperationInProgress = true;
+  updateBatchControls();
+  let started = 0;
+  let failed = 0;
+  for (const id of ids) { try { await downloadDocument(id); started++; } catch { failed++; } }
+  batchOperationInProgress = false;
+  updateBatchControls();
+  toast(failed ? `已发起 ${started} 个下载，${failed} 个失败` : `已发起 ${started} 个文件下载`);
+}
+
+async function deleteSelected() {
+  const ids = Array.from(selectedDocumentIds);
+  if (!ids.length || batchOperationInProgress) return;
+  if (!confirm(`确认删除选中的 ${ids.length} 个文档？此操作会清除原文件和向量。`)) return;
+  batchOperationInProgress = true;
+  updateBatchControls();
+  let deleted = 0;
+  let failed = 0;
+  for (const id of ids) { try { await deleteDocument(id); deleted++; } catch { failed++; } }
+  batchOperationInProgress = false;
+  clearDocumentSelection();
+  await loadDocs();
+  toast(failed ? `删除完成：${deleted} 个成功，${failed} 个失败` : `已删除 ${deleted} 个文档`);
+}
 $('#file').onchange = event => upload(event.target.files);
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(name => drop.addEventListener(name, event => {
@@ -348,12 +413,14 @@ $('#confirmAll').onclick = confirmAll;
 $('#prevPage').onclick = () => {
   if (currentPage > 1) {
     currentPage--;
+    clearDocumentSelection();
     loadDocs();
   }
 };
 $('#nextPage').onclick = () => {
   if (currentPage < totalPages) {
     currentPage++;
+    clearDocumentSelection();
     loadDocs();
   }
 };

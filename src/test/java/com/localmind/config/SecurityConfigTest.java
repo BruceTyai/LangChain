@@ -16,6 +16,7 @@ import com.localmind.controller.DocumentController;
 import com.localmind.controller.UserController;
 import com.localmind.dao.entity.AppUser;
 import com.localmind.dao.repository.AppUserRepository;
+import com.localmind.dto.AnswerType;
 import com.localmind.dto.ChatResponse;
 import com.localmind.dto.DocumentPageResponse;
 import com.localmind.service.AnonymousAccessService;
@@ -97,7 +98,7 @@ class SecurityConfigTest {
     @Test
     @WithMockUser(username = "reader", roles = "USER")
     void normalUserCanAskQuestions() throws Exception {
-        when(chatService.ask("测试问题")).thenReturn(new ChatResponse("测试回答", List.of()));
+        when(chatService.ask("测试问题")).thenReturn(new ChatResponse("测试回答", AnswerType.KNOWLEDGE_BASE, List.of()));
 
         mockMvc.perform(post("/api/chat")
                         .with(csrf())
@@ -167,7 +168,7 @@ class SecurityConfigTest {
     @Test
     void anonymousCanOnlyUseChatWhenEnabled() throws Exception {
         when(anonymousAccessService.isAllowed()).thenReturn(true);
-        when(chatService.ask("anonymous question")).thenReturn(new ChatResponse("anonymous question", List.of()));
+        when(chatService.ask("anonymous question")).thenReturn(new ChatResponse("anonymous question", AnswerType.MODEL_FALLBACK, List.of()));
 
         mockMvc.perform(post("/api/chat")
                         .with(csrf())

@@ -1,12 +1,19 @@
 package com.localmind.controller;
 
+import com.localmind.dto.DocumentDownload;
 import com.localmind.dto.DocumentPageResponse;
 import com.localmind.dto.DocumentResponse;
 import com.localmind.dto.DocumentUploadCommand;
 import com.localmind.service.DocumentService;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,6 +47,25 @@ public class DocumentController {
     @GetMapping("/confirmable")
     public List<DocumentResponse> confirmable() {
         return documentService.confirmable();
+    }
+
+    @GetMapping("/{id}/download")
+    public ResponseEntity<FileSystemResource> download(@PathVariable long id) {
+        DocumentDownload document = documentService.download(id);
+        MediaType contentType = MediaType.APPLICATION_OCTET_STREAM;
+        if (document.contentType() != null && !document.contentType().isBlank()) {
+            try {
+                contentType = MediaType.parseMediaType(document.contentType());
+            } catch (IllegalArgumentException ignored) {
+                // Send an unknown content type as a regular downloadable file.
+            }
+        }
+        return ResponseEntity.ok()
+                .contentType(contentType)
+                .contentLength(document.sizeBytes())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(document.fileName(), StandardCharsets.UTF_8).build().toString())
+                .body(new FileSystemResource(document.path()));
     }
 
     @PostMapping

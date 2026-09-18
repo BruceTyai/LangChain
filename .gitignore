@@ -6,3 +6,4 @@ target/
 .run/
 chroma-data/
 data/
+docker/

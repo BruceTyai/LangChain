@@ -65,15 +65,16 @@
                         <h1>知识库</h1>
                         <p>上传资料，让模型基于你的内容回答问题。</p>
                     </div>
-                    <div class="docs-actions"><button id="confirmAll" class="confirm-all" hidden>统一解析</button><label
+                    <div class="docs-actions"><button id="confirmAll" class="confirm-all" hidden>统一解析</button><button id="downloadSelected" class="batch-download" disabled>下载已选（0）</button><button id="deleteSelected" class="batch-delete" disabled>删除已选（0）</button><label
                             class="upload">＋ 上传文档<input type="file" id="file"
                                 accept=".pdf,.doc,.docx,.txt,.md,.html,.csv" multiple hidden></label></div>
                 </div>
+                <p class="batch-hint">批量下载会分别保存文件；浏览器可能要求允许多个文件下载。</p>
                 <div id="drop" class="drop"><span>⇧</span><b>拖放文件到这里</b>
                     <p>支持 PDF、Word、Markdown、TXT、HTML、CSV，单次上传合计最大 30MB</p>
                 </div>
                 <div class="table">
-                    <div class="thead"><span>文档</span><span>分块</span><span>状态</span><span>上传时间</span><span></span></div>
+                    <div class="thead"><span><input id="selectAll" type="checkbox" aria-label="全选当前页文档"></span><span>文档</span><span>分块</span><span>状态</span><span>上传时间</span><span></span></div>
                     <div id="docList"></div>
                 </div>
                 <div id="pagination" class="pagination"><button id="prevPage">上一页</button><span id="pageInfo">1 /
