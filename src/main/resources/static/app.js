@@ -60,6 +60,7 @@ let currentPage = 1;
 let currentDocuments = [];
 const selectedDocumentIds = new Set();
 let batchOperationInProgress = false;
+let reindexPollingTimer = null;
 
 const toast = message => {
   const element = $('#toast');
@@ -242,6 +243,9 @@ function updateBatchControls() {
   selectAll.disabled = batchOperationInProgress || selectableIds.length === 0;
   selectAll.checked = selectableIds.length > 0 && selectableIds.every(id => selectedDocumentIds.has(id));
   selectAll.indeterminate = selectedCount > 0 && !selectAll.checked;
+  $('#docList').querySelectorAll('.document-select').forEach(checkbox => {
+    checkbox.checked = selectedDocumentIds.has(Number(checkbox.dataset.id));
+  });
 }
 
 function clearDocumentSelection() {
@@ -263,13 +267,15 @@ async function loadDocs() {
     $('#pageInfo').textContent = `${currentPage} / ${totalPages}`;
     $('#prevPage').disabled = currentPage === 1 || batchOperationInProgress;
     $('#nextPage').disabled = currentPage === totalPages || batchOperationInProgress;
+    const reindexAll = $('#reindexAll');
+    if (reindexAll) { reindexAll.disabled = batchOperationInProgress; }
     const confirmableCount = result.confirmableElements;
     $('#confirmAll').hidden = confirmableCount === 0;
     $('#confirmAll').disabled = confirmingDocuments.size > 0 || batchOperationInProgress;
     $('#confirmAll').textContent = confirmingDocuments.size > 0 ? `解析队列剩余 ${confirmingDocuments.size} 个文档…` : `统一解析（${confirmableCount}）`;
     $('#docList').innerHTML = currentDocuments.length ? currentDocuments.map(document => {
       const selectable = isDocumentSelectable(document);
-      return `<div class="docrow"><span><input class="document-select" data-id="${document.id}" type="checkbox" aria-label="选择 ${escapeHtml(document.name)}" ${selectedDocumentIds.has(document.id) ? 'checked' : ''} ${selectable ? '' : 'disabled'}></span><div class="docname"><b>${escapeHtml(document.name)}</b><small>${formatSize(document.sizeBytes)}${document.errorMessage ? ` · ${escapeHtml(document.errorMessage)}` : ''}</small></div><span>${document.chunkCount}</span><span class="pill ${displayedStatus(document)}">${statusLabels[displayedStatus(document)] || displayedStatus(document)}</span><span>${new Date(document.createdAt).toLocaleString('zh-CN')}</span><div class="actions"><button class="del" onclick="removeDoc(${document.id})" ${selectable ? '' : 'disabled'}>×</button></div></div>`;
+      return `<div class="docrow"><span><input class="document-select" data-id="${document.id}" type="checkbox" aria-label="选择 ${escapeHtml(document.name)}" ${selectedDocumentIds.has(document.id) ? 'checked' : ''} ${selectable ? '' : 'disabled'}></span><div class="docname"><b>${escapeHtml(document.name)}</b><small>${formatSize(document.sizeBytes)}${document.errorMessage ? ` · ${escapeHtml(document.errorMessage)}` : ''}</small></div><span>${document.chunkCount}</span><span class="pill ${displayedStatus(document)}">${statusLabels[displayedStatus(document)] || displayedStatus(document)}</span><span>${new Date(document.createdAt).toLocaleString('zh-CN')}</span><div class="actions"><button class="confirm" onclick="reindexDocument(${document.id})" ${selectable ? '' : 'disabled'}>重新分块</button><button class="del" onclick="removeDoc(${document.id})" ${selectable ? '' : 'disabled'}>×</button></div></div>`;
     }).join('') : '<div class="empty">还没有文档，上传第一份资料开始使用</div>';
     updateBatchControls();
   } catch (error) { toast('无法读取文档列表'); }
@@ -335,6 +341,42 @@ async function confirmAll() {
     ? `解析完成：${succeeded} 个成功，${failed} 个失败`
     : `解析完成：${succeeded} 个文档已就绪`);
 }
+function updateReindexButton(job) {
+  const button = $('#reindexAll');
+  if (!button) return;
+  const running = job && job.status === 'RUNNING';
+  button.disabled = running || batchOperationInProgress;
+  button.textContent = running ? `正在重建 ${job.completed}/${job.total}` : '全部重新分块向量化';
+}
+function stopReindexPolling() {
+  if (reindexPollingTimer) clearTimeout(reindexPollingTimer);
+  reindexPollingTimer = null;
+}
+async function pollReindexJob() {
+  try {
+    const response = await apiFetch('/api/document-reindex-jobs/current');
+    if (response.status === 400 || response.status === 404) return;
+    const job = await response.json();
+    if (!response.ok) throw Error(job.message || '无法读取重建进度');
+    updateReindexButton(job);
+    if (job.status === 'RUNNING') { reindexPollingTimer = setTimeout(pollReindexJob, 1500); return; }
+    stopReindexPolling();
+    await loadDocs();
+    toast(job.failed ? `重建完成：${job.succeeded} 成功，${job.failed} 失败，${job.skipped} 跳过` : `重建完成：${job.succeeded} 成功，${job.skipped} 跳过`);
+  } catch (error) { stopReindexPolling(); toast(error.message || '无法读取重建进度'); }
+}
+async function startReindex(url, confirmation) {
+  if (!confirm(confirmation)) return;
+  try {
+    const response = await apiFetch(url, {method: 'POST'});
+    const job = await response.json();
+    if (!response.ok) throw Error(job.message || '无法开始重新分块向量化');
+    updateReindexButton(job); stopReindexPolling(); reindexPollingTimer = setTimeout(pollReindexJob, 300);
+    toast(job.total ? `已开始重建 ${job.total} 个文档` : `没有可重建的文档，已跳过 ${job.skipped} 个`);
+  } catch (error) { toast(error.message || '无法开始重新分块向量化'); }
+}
+function reindexDocument(id) { startReindex(`/api/documents/${id}/reindex`, '确认按当前分块参数重新生成该文档的向量？'); }
+function reindexAll() { startReindex('/api/documents/reindex', '确认按当前分块参数重新生成全部可处理文档的向量？此过程可能需要较长时间。'); }
 async function errorMessage(response, fallback) {
   try { const data = await response.json(); return data.message || fallback; } catch { return fallback; }
 }
@@ -378,9 +420,12 @@ async function downloadSelected() {
   updateBatchControls();
   let started = 0;
   let failed = 0;
-  for (const id of ids) { try { await downloadDocument(id); started++; } catch { failed++; } }
-  batchOperationInProgress = false;
-  updateBatchControls();
+  try {
+    for (const id of ids) { try { await downloadDocument(id); started++; } catch { failed++; } }
+  } finally {
+    batchOperationInProgress = false;
+    updateBatchControls();
+  }
   toast(failed ? `已发起 ${started} 个下载，${failed} 个失败` : `已发起 ${started} 个文件下载`);
 }
 
@@ -392,13 +437,34 @@ async function deleteSelected() {
   updateBatchControls();
   let deleted = 0;
   let failed = 0;
-  for (const id of ids) { try { await deleteDocument(id); deleted++; } catch { failed++; } }
-  batchOperationInProgress = false;
-  clearDocumentSelection();
-  await loadDocs();
+  try {
+    for (const id of ids) { try { await deleteDocument(id); deleted++; } catch { failed++; } }
+  } finally {
+    batchOperationInProgress = false;
+    clearDocumentSelection();
+    await loadDocs();
+  }
   toast(failed ? `删除完成：${deleted} 个成功，${failed} 个失败` : `已删除 ${deleted} 个文档`);
 }
 $('#file').onchange = event => upload(event.target.files);
+$('#docList').addEventListener('change', event => {
+  const checkbox = event.target.closest('.document-select');
+  if (!checkbox || checkbox.disabled) return;
+  const id = Number(checkbox.dataset.id);
+  if (!Number.isSafeInteger(id)) return;
+  if (checkbox.checked) selectedDocumentIds.add(id);
+  else selectedDocumentIds.delete(id);
+  updateBatchControls();
+});
+$('#selectAll').onchange = event => {
+  currentDocuments.filter(isDocumentSelectable).forEach(document => {
+    if (event.target.checked) selectedDocumentIds.add(document.id);
+    else selectedDocumentIds.delete(document.id);
+  });
+  updateBatchControls();
+};
+$('#downloadSelected').onclick = downloadSelected;
+$('#deleteSelected').onclick = deleteSelected;
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(name => drop.addEventListener(name, event => {
   event.preventDefault();
@@ -410,6 +476,7 @@ const drop = $('#drop');
 }));
 drop.ondrop = event => upload(event.dataTransfer.files);
 $('#confirmAll').onclick = confirmAll;
+$('#reindexAll').onclick = reindexAll;
 $('#prevPage').onclick = () => {
   if (currentPage > 1) {
     currentPage--;
@@ -519,6 +586,7 @@ window.updateUser = updateUser;
 window.resetUserPassword = resetUserPassword;
 window.deleteUser = deleteUser;
 window.removeDoc = removeDoc;
+window.reindexDocument = reindexDocument;
 sessionReady.then(() => {
-  if (isAdmin) loadDocs();
+  if (isAdmin) { loadDocs(); pollReindexJob(); }
 }).catch(() => {});

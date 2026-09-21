@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -126,7 +127,7 @@ public class DocumentService {
             throw new IllegalArgumentException("只有待确认或解析失败的文档可以开始解析");
         }
 
-        removeEmbeddings(document.getId());
+        removeEmbeddings(id);
 
         Path stagedPath = resolveStagedFile(document.getStagedFile());
         document.setStatus(KnowledgeDocument.Status.PROCESSING);
@@ -153,12 +154,85 @@ public class DocumentService {
         return toResponse(repository.save(document));
     }
 
+    @Transactional(readOnly = true)
+    public ReindexTargets reindexTargets() {
+        List<Long> ids = new ArrayList<>();
+        int skipped = 0;
+        for (KnowledgeDocument document : repository.findAll()) {
+            if (document.getStatus() == KnowledgeDocument.Status.PROCESSING || !hasRetainedOriginal(document)) {
+                skipped++;
+                continue;
+            }
+            ids.add(document.getId());
+        }
+        return new ReindexTargets(ids, skipped);
+    }
+
+    @Transactional(readOnly = true)
+    public void ensureReindexable(long id) {
+        KnowledgeDocument document = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
+        if (document.getStatus() == KnowledgeDocument.Status.PROCESSING) {
+            throw new IllegalStateException("Document is already processing");
+        }
+        if (!hasRetainedOriginal(document)) {
+            throw new IllegalStateException("Original file is not available");
+        }
+    }
+
+    /** Rebuilds a document into a new vector group before removing its active group. */
+    @Transactional
+    public DocumentResponse reindex(long id) {
+        KnowledgeDocument document = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
+        if (document.getStatus() == KnowledgeDocument.Status.PROCESSING) {
+            throw new IllegalStateException("Document is already processing");
+        }
+        Path stagedPath = resolveStagedFile(document.getStagedFile());
+        if (!Files.isRegularFile(stagedPath)) {
+            throw new IllegalStateException("Original file is not available");
+        }
+        String candidateGroup = "reindex-" + document.getId() + "-" + UUID.randomUUID();
+        try {
+            List<TextSegment> segments;
+            try (InputStream input = Files.newInputStream(stagedPath)) {
+                Document parsedDocument = new ApacheTikaDocumentParser().parse(input);
+                segments = DocumentSplitters.recursive(segmentSize, overlap).split(parsedDocument);
+            }
+            segments.forEach(segment -> {
+                segment.metadata().put("documentId", candidateGroup);
+                segment.metadata().put("logicalDocumentId", document.getId().toString());
+                segment.metadata().put("embeddingGroup", candidateGroup);
+                segment.metadata().put("source", document.getName());
+            });
+            List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+            embeddingStore.addAll(embeddings, segments);
+            try {
+                removeActiveEmbeddings(document, id);
+            } catch (Exception cleanupFailure) {
+                tryRemoveEmbeddingsByGroup(candidateGroup);
+                throw cleanupFailure;
+            }
+            document.setEmbeddingGroup(candidateGroup);
+            document.setChunkCount(segments.size());
+            document.setStatus(KnowledgeDocument.Status.READY);
+            document.setErrorMessage(null);
+            return toResponse(repository.save(document));
+        } catch (Exception exception) {
+            tryRemoveEmbeddingsByGroup(candidateGroup);
+            throw exception instanceof RuntimeException runtimeException
+                    ? runtimeException : new IllegalStateException("Document re-index failed", exception);
+        }
+    }
+
+    public record ReindexTargets(List<Long> documentIds, int skipped) {
+    }
     @Transactional
     public void delete(long id) {
         KnowledgeDocument document = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + id));
         if (document.getStatus() != KnowledgeDocument.Status.PENDING) {
-            removeEmbeddings(id);
+            removeActiveEmbeddings(document, id);
         }
         if (document.getStagedFile() != null) {
             registerCommitCleanup(resolveStagedFile(document.getStagedFile()));
@@ -202,6 +276,37 @@ public class DocumentService {
         }
     }
 
+    private boolean hasRetainedOriginal(KnowledgeDocument document) {
+        if (document.getStagedFile() == null || document.getStagedFile().isBlank()) {
+            return false;
+        }
+        try {
+            return Files.isRegularFile(resolveStagedFile(document.getStagedFile()));
+        } catch (IllegalStateException exception) {
+            return false;
+        }
+    }
+
+    private void removeActiveEmbeddings(KnowledgeDocument document, long legacyDocumentId) {
+        if (document.getEmbeddingGroup() == null || document.getEmbeddingGroup().isBlank()) {
+            removeEmbeddings(legacyDocumentId);
+            return;
+        }
+        removeEmbeddingsByGroup(document.getEmbeddingGroup());
+    }
+
+    private void removeEmbeddingsByGroup(String group) {
+        embeddingStore.removeAll(MetadataFilterBuilder.metadataKey("embeddingGroup").isEqualTo(group));
+    }
+
+    private String tryRemoveEmbeddingsByGroup(String group) {
+        try {
+            removeEmbeddingsByGroup(group);
+            return null;
+        } catch (Exception cleanupException) {
+            return cleanupException.getMessage() == null ? "Candidate vector cleanup failed" : cleanupException.getMessage();
+        }
+    }
     private void removeEmbeddings(long documentId) {
         embeddingStore.removeAll(
                 MetadataFilterBuilder.metadataKey("documentId").isEqualTo(Long.toString(documentId)));

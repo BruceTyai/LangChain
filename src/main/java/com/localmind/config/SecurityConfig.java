@@ -70,9 +70,10 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, SessionRegistry sessions,
             AnonymousAccessService anonymousAccess) throws Exception {
-        http.authorizeHttpRequests(authorize -> authorize
+        http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/chat/**"))
+                .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/login", "/login.css", "/error").permitAll()
-                        .requestMatchers("/api/documents/**", "/api/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/documents/**", "/api/document-reindex-jobs/**", "/api/users/**").hasRole("ADMIN")
                         .requestMatchers("/", "/index.html", "/app.js", "/style.css", "/favicon.ico",
                                 "/api/chat/**", "/api/auth/me")
                         .access((authentication, context) -> {

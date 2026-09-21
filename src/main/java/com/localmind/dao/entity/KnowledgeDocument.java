@@ -33,6 +33,9 @@ public class KnowledgeDocument {
 
     private int chunkCount;
 
+    @Column(length = 100)
+    private String embeddingGroup;
+
     @Column(length = 1000)
     private String errorMessage;
 
@@ -55,6 +58,8 @@ public class KnowledgeDocument {
     public void setStatus(Status status) { this.status = status; }
     public int getChunkCount() { return chunkCount; }
     public void setChunkCount(int chunkCount) { this.chunkCount = chunkCount; }
+    public String getEmbeddingGroup() { return embeddingGroup; }
+    public void setEmbeddingGroup(String embeddingGroup) { this.embeddingGroup = embeddingGroup; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
     public String getStagedFile() { return stagedFile; }

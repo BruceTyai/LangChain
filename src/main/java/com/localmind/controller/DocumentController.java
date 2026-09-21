@@ -29,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 public class DocumentController {
 
     private static final long MAX_UPLOAD_BYTES = 30L * 1024 * 1024;
-
     private final DocumentService documentService;
 
     public DocumentController(DocumentService documentService) {
@@ -38,9 +37,7 @@ public class DocumentController {
 
     @GetMapping
     public DocumentPageResponse list(@RequestParam(defaultValue = "0") int page) {
-        if (page < 0) {
-            throw new IllegalArgumentException("页码不能小于 0");
-        }
+        if (page < 0) throw new IllegalArgumentException("Page must not be negative");
         return documentService.page(page, 10);
     }
 
@@ -54,15 +51,10 @@ public class DocumentController {
         DocumentDownload document = documentService.download(id);
         MediaType contentType = MediaType.APPLICATION_OCTET_STREAM;
         if (document.contentType() != null && !document.contentType().isBlank()) {
-            try {
-                contentType = MediaType.parseMediaType(document.contentType());
-            } catch (IllegalArgumentException ignored) {
-                // Send an unknown content type as a regular downloadable file.
-            }
+            try { contentType = MediaType.parseMediaType(document.contentType()); }
+            catch (IllegalArgumentException ignored) { }
         }
-        return ResponseEntity.ok()
-                .contentType(contentType)
-                .contentLength(document.sizeBytes())
+        return ResponseEntity.ok().contentType(contentType).contentLength(document.sizeBytes())
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(document.fileName(), StandardCharsets.UTF_8).build().toString())
                 .body(new FileSystemResource(document.path()));
@@ -72,13 +64,10 @@ public class DocumentController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<DocumentResponse> upload(@RequestParam("file") List<MultipartFile> files) throws IOException {
         long totalSize = files.stream().mapToLong(MultipartFile::getSize).sum();
-        if (totalSize > MAX_UPLOAD_BYTES) {
-            throw new IllegalArgumentException("单次上传文件总大小不能超过 30MB");
-        }
+        if (totalSize > MAX_UPLOAD_BYTES) throw new IllegalArgumentException("单次上传文件总大小不能超过 30MB");
         List<DocumentUploadCommand> commands = new java.util.ArrayList<>();
         for (MultipartFile file : files) {
-            commands.add(new DocumentUploadCommand(
-                    file.getOriginalFilename(), file.getContentType(), file.getBytes()));
+            commands.add(new DocumentUploadCommand(file.getOriginalFilename(), file.getContentType(), file.getBytes()));
         }
         return documentService.stageAll(commands);
     }

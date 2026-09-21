@@ -101,7 +101,6 @@ class SecurityConfigTest {
         when(chatService.ask("测试问题")).thenReturn(new ChatResponse("测试回答", AnswerType.KNOWLEDGE_BASE, List.of()));
 
         mockMvc.perform(post("/api/chat")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"测试问题\"}"))
                 .andExpect(status().isOk())
@@ -159,7 +158,6 @@ class SecurityConfigTest {
     @Test
     void anonymousCannotChatWhenDisabled() throws Exception {
         mockMvc.perform(post("/api/chat")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"anonymous question\"}"))
                 .andExpect(status().isUnauthorized());
@@ -171,7 +169,6 @@ class SecurityConfigTest {
         when(chatService.ask("anonymous question")).thenReturn(new ChatResponse("anonymous question", AnswerType.MODEL_FALLBACK, List.of()));
 
         mockMvc.perform(post("/api/chat")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"anonymous question\"}"))
                 .andExpect(status().isOk())
@@ -181,6 +178,15 @@ class SecurityConfigTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void anonymousEmptyChatRequestReturnsBadRequestWithoutCsrf() throws Exception {
+        when(anonymousAccessService.isAllowed()).thenReturn(true);
+
+        mockMvc.perform(post("/api/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
     @Test
     void anonymousSessionReturnsAnonymousRoleWhenEnabled() throws Exception {
         when(anonymousAccessService.isAllowed()).thenReturn(true);

@@ -40,3 +40,6 @@ header{flex:0 0 61px}
 
 /* Knowledge-base batch operations */
 .docs-actions{flex-wrap:wrap;justify-content:flex-end}.thead,.docrow{grid-template-columns:26px minmax(220px,1fr) 90px 100px 155px 120px}.thead input,.docrow input{accent-color:var(--accent);cursor:pointer}.batch-download,.batch-delete{border:1px solid var(--line);border-radius:6px;background:var(--panel-soft);color:var(--text);padding:9px 11px;cursor:pointer}.batch-delete{border-color:#754a42;color:#e3a095}.batch-download:disabled,.batch-delete:disabled{opacity:.5;cursor:default}.batch-hint{margin:10px 0 -15px;color:#898279;font-size:11px}@media(max-width:760px){.docrow{grid-template-columns:26px 1fr auto}.docrow>span:nth-child(3),.docrow>span:nth-child(5){display:none}}
+
+/* re-index controls */
+.actions .confirm{font-size:10px}.docs-actions #reindexAll{border-color:#8a5d49;color:#efb79d}
