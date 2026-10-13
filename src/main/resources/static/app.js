@@ -191,8 +191,13 @@ $('#chatForm').onsubmit = async event => {
     const sources = data.answerType === 'KNOWLEDGE_BASE' && data.sources?.length
       ? `<details class="sources"><summary>查看 ${data.sources.length} 个引用来源</summary>${data.sources.map(source => `<div class="source"><b>[资料 ${source.index}] ${escapeHtml(source.name || '未知来源')}</b><br>${escapeHtml(source.excerpt)} · ${(source.score * 100).toFixed(0)}% 匹配</div>`).join('')}</details>`
       : '';
+    const answerTypeNotice = data.answerType === 'COMMON_KNOWLEDGE'
+      ? '<p class="answer-notice">通用信息，非知识库资料</p>'
+      : data.answerType === 'NO_INFORMATION'
+        ? '<p class="answer-notice">知识库未收录相关信息</p>'
+        : '';
     waiting.sourceAnswer = data.answer.trim();
-    waiting.querySelector('.body').innerHTML = `<span class="answer-text"></span>${sources}`;
+    waiting.querySelector('.body').innerHTML = `<span class="answer-text"></span>${answerTypeNotice}${sources}`;
     applySourceVisibility();
   } catch (error) {
     waiting.querySelector('.body').textContent = `出错了：${error.message}`;

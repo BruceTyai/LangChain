@@ -31,7 +31,7 @@ app:
   upload:
     directory: ${UPLOAD_DIRECTORY:./data/uploads}
   rag:
-    max-results: 3
-    min-score: 0.8
+    max-results: 6
+    min-score: 0.7
     segment-size: 700
     overlap: 100

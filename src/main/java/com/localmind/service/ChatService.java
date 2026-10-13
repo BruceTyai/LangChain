@@ -33,6 +33,7 @@ import java.util.Set;
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+    private static final String NO_INFORMATION_ANSWER = "知识库未收录相关信息，无法确认。";
     private static final ZoneId SHANGHAI_ZONE = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss EEEE");
@@ -63,26 +64,31 @@ public class ChatService {
     public ChatResponse ask(String question) {
         List<RetrievedSource> retrievedSources = retrieveSources(question);
         List<RetrievedSource> usableSources = selectUsableSources(question, retrievedSources);
-        AnswerType answerType = usableSources.isEmpty()
-                ? AnswerType.MODEL_FALLBACK
-                : AnswerType.KNOWLEDGE_BASE;
-
         String currentDateTime = ZonedDateTime.now(SHANGHAI_ZONE)
                 .format(DATE_TIME_FORMATTER);
-        String context = answerType == AnswerType.KNOWLEDGE_BASE
-                ? buildContext(usableSources)
-                : "无可用知识库资料";
+        if (!usableSources.isEmpty()) {
+            String answer = chat(
+                    buildAnswerSystemPrompt(currentDateTime, AnswerType.KNOWLEDGE_BASE),
+                    buildAnswerUserPrompt(buildContext(usableSources), question, AnswerType.KNOWLEDGE_BASE)
+            );
+            List<ChatSource> responseSources = usableSources.stream()
+                    .map(RetrievedSource::source)
+                    .toList();
+            log.info("LLM answer type: {}, answer: {}", AnswerType.KNOWLEDGE_BASE, answer);
+            return new ChatResponse(answer, AnswerType.KNOWLEDGE_BASE, responseSources);
+        }
+
+        if (!isConfirmableFact(question, currentDateTime)) {
+            log.info("LLM answer type: {}, question: {}", AnswerType.NO_INFORMATION, question);
+            return new ChatResponse(NO_INFORMATION_ANSWER, AnswerType.NO_INFORMATION, List.of());
+        }
 
         String answer = chat(
-                buildAnswerSystemPrompt(currentDateTime, answerType),
-                buildAnswerUserPrompt(context, question, answerType)
+                buildAnswerSystemPrompt(currentDateTime, AnswerType.COMMON_KNOWLEDGE),
+                buildAnswerUserPrompt("无可用知识库资料", question, AnswerType.COMMON_KNOWLEDGE)
         );
-        List<ChatSource> responseSources = answerType == AnswerType.KNOWLEDGE_BASE
-                ? usableSources.stream().map(RetrievedSource::source).toList()
-                : List.of();
-
-        log.info("LLM answer type: {}, answer: {}", answerType, answer);
-        return new ChatResponse(answer, answerType, responseSources);
+        log.info("LLM answer type: {}, answer: {}", AnswerType.COMMON_KNOWLEDGE, answer);
+        return new ChatResponse(answer, AnswerType.COMMON_KNOWLEDGE, List.of());
     }
 
     private List<RetrievedSource> retrieveSources(String question) {
@@ -126,7 +132,7 @@ public class ChatService {
                 只能输出一行 JSON，禁止 Markdown、解释和其他文字：
                 {"answerType":"KNOWLEDGE_BASE","sourceIndexes":[1,2]}
                 或
-                {"answerType":"MODEL_FALLBACK","sourceIndexes":[]}
+                {"answerType":"NO_INFORMATION","sourceIndexes":[]}
                 仅当资料包含问题的实际答案时，才返回 KNOWLEDGE_BASE；
                 sourceIndexes 只能填写实际用于回答的资料编号。
                 """, """
@@ -170,6 +176,36 @@ public class ChatService {
         }
     }
 
+    private boolean isConfirmableFact(String question, String currentDateTime) {
+        String decision = chat("""
+                你是事实可确认性判定器。判断用户问题能否在没有知识库资料的情况下安全、准确地回答。
+                仅当能基于已注入的提示信息和可靠的通用知识准确回答，且不需要猜测、补充未提供的事实时，才输出 CONFIRMABLE。
+                只要无法确保答案准确、需要依赖未提供的信息，或可能编造事实，就必须输出 UNCONFIRMABLE。
+                只能输出一行 JSON，禁止 Markdown、解释和其他文字：
+                {"factConfirmation":"CONFIRMABLE"}
+                或
+                {"factConfirmation":"UNCONFIRMABLE"}
+                """, """
+                【当前日期和时间】
+                %s
+
+                【用户问题】
+                %s
+                """.formatted(currentDateTime, question));
+        String json = extractJsonObject(decision);
+        if (json == null) {
+            log.warn("Fact confirmation contains no JSON object; rejecting answer. response={}", decision);
+            return false;
+        }
+        try {
+            FactConfirmationDecision parsed = objectMapper.readValue(json, FactConfirmationDecision.class);
+            return parsed.factConfirmation() == FactConfirmation.CONFIRMABLE;
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            log.warn("Fact confirmation JSON could not be parsed; rejecting answer. json={}", json);
+            return false;
+        }
+    }
+
     private String extractJsonObject(String response) {
         if (response == null) {
             return null;
@@ -204,7 +240,7 @@ public class ChatService {
     private String buildAnswerSystemPrompt(String currentDateTime, AnswerType answerType) {
         String modeInstruction = answerType == AnswerType.KNOWLEDGE_BASE
                 ? "只能根据提供的知识库资料回答；资料外的信息不得补充或猜测。"
-                : "可以使用模型通用知识回答，并明确说明该回答并非来自知识库。";
+                : "这是通用信息回答，不来自知识库。仅回答已确认可准确回答的问题；不得编造、猜测或补充未提供的事实，不得声称来自知识库。";
         return """
                 你是技术保障部知识库系统。
 
@@ -220,7 +256,7 @@ public class ChatService {
     private String buildAnswerUserPrompt(String context, String question, AnswerType answerType) {
         String instruction = answerType == AnswerType.KNOWLEDGE_BASE
                 ? "请直接输出资料中的实际答案。"
-                : "无需标注引用来源。";
+                : "请直接回答，并在答案开头标注“通用信息（非知识库资料）：”。";
         return """
                 【知识库资料】
                 %s
@@ -243,5 +279,13 @@ public class ChatService {
     }
 
     private record KnowledgeDecision(AnswerType answerType, List<Integer> sourceIndexes) {
+    }
+
+    private enum FactConfirmation {
+        CONFIRMABLE,
+        UNCONFIRMABLE
+    }
+
+    private record FactConfirmationDecision(FactConfirmation factConfirmation) {
     }
 }

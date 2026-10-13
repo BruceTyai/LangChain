@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 class ChatServiceTest {
 
     @Test
-    void usesModelFallbackAndHidesRetrievedSourcesWhenDecisionRejectsKnowledgeBase() {
+    void returnsNoInformationWhenNoSourceCanConfirmTheFact() {
         ChatModel chatModel = mock(ChatModel.class);
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
         EmbeddingStore<TextSegment> embeddingStore = mock(EmbeddingStore.class);
@@ -36,16 +36,38 @@ class ChatServiceTest {
                 .thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
         when(embeddingStore.search(any())).thenReturn(searchResult("值班电话：720750", "contact.txt"));
         when(chatModel.chat(any(ChatRequest.class)))
-                .thenReturn(modelResponse("{\"answerType\":\"MODEL_FALLBACK\",\"sourceIndexes\":[]}"))
-                .thenReturn(modelResponse("这是模型通用知识答案。"));
+                .thenReturn(modelResponse("{\"answerType\":\"NO_INFORMATION\",\"sourceIndexes\":[]}"))
+                .thenReturn(modelResponse("{\"factConfirmation\":\"UNCONFIRMABLE\"}"));
 
         ChatResponse response = new ChatService(
                 chatModel, embeddingModel, embeddingStore, new ObjectMapper(), 3, 0.8
         ).ask("值班电话");
 
-        assertThat(response.answerType()).isEqualTo(AnswerType.MODEL_FALLBACK);
+        assertThat(response.answerType()).isEqualTo(AnswerType.NO_INFORMATION);
         assertThat(response.sources()).isEmpty();
-        assertThat(response.answer()).isEqualTo("这是模型通用知识答案。");
+        assertThat(response.answer()).isEqualTo("知识库未收录相关信息，无法确认。");
+        verify(chatModel, times(2)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void answersConfirmedCommonKnowledgeWithoutSources() {
+        ChatModel chatModel = mock(ChatModel.class);
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        EmbeddingStore<TextSegment> embeddingStore = mock(EmbeddingStore.class);
+        when(embeddingModel.embed("今天是几号"))
+                .thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
+        when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
+        when(chatModel.chat(any(ChatRequest.class)))
+                .thenReturn(modelResponse("{\"factConfirmation\":\"CONFIRMABLE\"}"))
+                .thenReturn(modelResponse("通用信息（非知识库资料）：今天是9月24日。"));
+
+        ChatResponse response = new ChatService(
+                chatModel, embeddingModel, embeddingStore, new ObjectMapper(), 3, 0.8
+        ).ask("今天是几号");
+
+        assertThat(response.answerType()).isEqualTo(AnswerType.COMMON_KNOWLEDGE);
+        assertThat(response.sources()).isEmpty();
+        assertThat(response.answer()).contains("非知识库资料");
         verify(chatModel, times(2)).chat(any(ChatRequest.class));
     }
 
@@ -99,7 +121,7 @@ class ChatServiceTest {
     void fallsBackWhenDecisionContainsNoJsonObject() {
         ChatResponse response = askWithDecision("资料不足，建议使用模型通用知识。");
 
-        assertThat(response.answerType()).isEqualTo(AnswerType.MODEL_FALLBACK);
+        assertThat(response.answerType()).isEqualTo(AnswerType.NO_INFORMATION);
         assertThat(response.sources()).isEmpty();
     }
 

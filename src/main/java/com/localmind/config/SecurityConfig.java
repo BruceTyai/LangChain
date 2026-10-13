@@ -43,6 +43,7 @@ public class SecurityConfig {
                     .build();
         };
     }
+    
 
     @Bean
     ApplicationRunner initializeAdmin(AppUserRepository repository, PasswordEncoder encoder) {

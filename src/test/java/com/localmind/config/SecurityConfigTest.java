@@ -166,7 +166,7 @@ class SecurityConfigTest {
     @Test
     void anonymousCanOnlyUseChatWhenEnabled() throws Exception {
         when(anonymousAccessService.isAllowed()).thenReturn(true);
-        when(chatService.ask("anonymous question")).thenReturn(new ChatResponse("anonymous question", AnswerType.MODEL_FALLBACK, List.of()));
+        when(chatService.ask("anonymous question")).thenReturn(new ChatResponse("anonymous question", AnswerType.COMMON_KNOWLEDGE, List.of()));
 
         mockMvc.perform(post("/api/chat")
                         .contentType(MediaType.APPLICATION_JSON)
